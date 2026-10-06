@@ -11,7 +11,7 @@ final class Renderer {
     private var pixelSize: (width: Int, height: Int) = (0, 0)
 
     init?(window: Window) {
-        guard let hwnd = window.hwnd, let r = tw_renderer_create(hwnd) else { return nil }
+        guard let hwnd = window.hwnd, let r = tw_renderer_create(raw(hwnd)) else { return nil }
         handle = r
         owner = window
     }

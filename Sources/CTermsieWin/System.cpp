@@ -1,6 +1,8 @@
 // Process setup, processes, the credential store, the clipboard, shell integration, file dialogs,
 // and file integrity checks.
 
+#include <windows.h>
+
 #include "CTermsieWin.h"
 
 #include <shellapi.h>
@@ -13,6 +15,7 @@
 #include <softpub.h>
 #include <wintrust.h>
 #include <dwmapi.h>
+#include <imm.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string>
@@ -26,6 +29,7 @@
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "imm32.lib")
 
 extern "C" {
 
@@ -60,7 +64,8 @@ DWORD tw_windows_build(void) {
 
 // ------------------------------------------------------------------------------------- window
 
-int tw_window_set_appearance(HWND hwnd, int dark, int backdrop) {
+int tw_window_set_appearance(TWWindowHandle hwnd_handle, int dark, int backdrop) {
+    HWND hwnd = (HWND)hwnd_handle;
     if (!hwnd) return 0;
     BOOL useDark = dark ? TRUE : FALSE;
     DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &useDark, sizeof(useDark));
@@ -73,7 +78,8 @@ int tw_window_set_appearance(HWND hwnd, int dark, int backdrop) {
     return 1;
 }
 
-void tw_window_set_icon(HWND hwnd, const wchar_t *icoPath) {
+void tw_window_set_icon(TWWindowHandle hwnd_handle, const wchar_t *icoPath) {
+    HWND hwnd = (HWND)hwnd_handle;
     if (!hwnd) return;
     HINSTANCE module = GetModuleHandleW(nullptr);
     HICON big = (HICON)LoadImageW(module, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXICON),
@@ -88,6 +94,51 @@ void tw_window_set_icon(HWND hwnd, const wchar_t *icoPath) {
     }
     if (big) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)big);
     if (smallIcon) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)smallIcon);
+}
+
+void tw_ime_set_position(TWWindowHandle hwnd_handle, int x, int y, int lineHeight) {
+    HWND hwnd = (HWND)hwnd_handle;
+    if (!hwnd) return;
+    HIMC imc = ImmGetContext(hwnd);
+    if (!imc) return;
+    COMPOSITIONFORM form = {};
+    form.dwStyle = CFS_POINT;
+    form.ptCurrentPos.x = x;
+    form.ptCurrentPos.y = y;
+    ImmSetCompositionWindow(imc, &form);
+    CANDIDATEFORM candidate = {};
+    candidate.dwIndex = 0;
+    candidate.dwStyle = CFS_EXCLUDE;
+    candidate.ptCurrentPos.x = x;
+    candidate.ptCurrentPos.y = y;
+    candidate.rcArea = {x, y, x + 1, y + lineHeight};
+    ImmSetCandidateWindow(imc, &candidate);
+    ImmReleaseContext(hwnd, imc);
+}
+
+int tw_track_menu(TWWindowHandle owner_handle, TWMenuHandle menu_handle, int x, int y) {
+    HWND owner = (HWND)owner_handle;
+    HMENU menu = (HMENU)menu_handle;
+    if (!menu) return 0;
+    // The owner must be foreground or the menu will not close when the user clicks elsewhere.
+    SetForegroundWindow(owner);
+    int chosen = (int)TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, x, y, 0, owner, nullptr);
+    PostMessageW(owner, WM_NULL, 0, 0);
+    return chosen;
+}
+
+void tw_menus_use_dark_mode(int dark) {
+    // uxtheme ordinal 135 is SetPreferredAppMode (2 = force dark, 3 = force light) and 136 is
+    // FlushMenuThemes. Undocumented but stable since Windows 10 1903, and absent harmlessly
+    // before it.
+    HMODULE uxtheme = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!uxtheme) return;
+    typedef int(WINAPI * SetModeFn)(int);
+    typedef void(WINAPI * FlushFn)(void);
+    auto setMode = (SetModeFn)GetProcAddress(uxtheme, MAKEINTRESOURCEA(135));
+    auto flush = (FlushFn)GetProcAddress(uxtheme, MAKEINTRESOURCEA(136));
+    if (setMode && tw_windows_build() >= 18362) setMode(dark ? 2 : 3);
+    if (flush) flush();
 }
 
 // ---------------------------------------------------------------------------------- processes
@@ -198,7 +249,8 @@ static BOOL openClipboard(HWND owner) {
     return FALSE;
 }
 
-int tw_clipboard_set_text(HWND owner, const wchar_t *text, int len) {
+int tw_clipboard_set_text(TWWindowHandle owner_handle, const wchar_t *text, int len) {
+    HWND owner = (HWND)owner_handle;
     if (!text || len < 0) return 0;
     if (!openClipboard(owner)) return 0;
     EmptyClipboard();
@@ -218,7 +270,8 @@ int tw_clipboard_set_text(HWND owner, const wchar_t *text, int len) {
     return ok;
 }
 
-wchar_t *tw_clipboard_get_text(HWND owner) {
+wchar_t *tw_clipboard_get_text(TWWindowHandle owner_handle) {
+    HWND owner = (HWND)owner_handle;
     if (!openClipboard(owner)) return nullptr;
     wchar_t *result = nullptr;
     HANDLE data = GetClipboardData(CF_UNICODETEXT);
@@ -255,9 +308,10 @@ int tw_shell_reveal(const wchar_t *folder, const wchar_t *file) {
     return (INT_PTR)ShellExecuteW(nullptr, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL) > 32;
 }
 
-int tw_file_dialog(HWND owner, int save, int pickFolder, const wchar_t *title, const wchar_t *filterName,
+int tw_file_dialog(TWWindowHandle owner_handle, int save, int pickFolder, const wchar_t *title, const wchar_t *filterName,
                    const wchar_t *filterSpec, const wchar_t *defaultName, const wchar_t *defaultExtension,
                    const wchar_t *initialFolder, wchar_t *out, int capacity) {
+    HWND owner = (HWND)owner_handle;
     if (!out || capacity <= 0) return 0;
     IFileDialog *dialog = nullptr;
     HRESULT hr = CoCreateInstance(save ? CLSID_FileSaveDialog : CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,

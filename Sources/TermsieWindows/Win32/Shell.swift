@@ -5,11 +5,11 @@ import CTermsieWin
 enum Clipboard {
     static func set(_ text: String, owner: HWND?) {
         let units = Array(text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\n", with: "\r\n").utf16)
-        _ = units.withUnsafeBufferPointer { tw_clipboard_set_text(owner, $0.baseAddress, Int32($0.count)) }
+        _ = units.withUnsafeBufferPointer { tw_clipboard_set_text(raw(owner), $0.baseAddress, Int32($0.count)) }
     }
 
     static func get(owner: HWND?) -> String? {
-        guard let raw = tw_clipboard_get_text(owner) else { return nil }
+        guard let raw = tw_clipboard_get_text(raw(owner)) else { return nil }
         defer { tw_free(raw) }
         return String(wide: raw)
     }
@@ -96,7 +96,7 @@ enum FileDialog {
                     withOptionalWide(defaultName) { dn in
                         withOptionalWide(defaultExtension) { de in
                             withOptionalWide(folder) { f in
-                                tw_file_dialog(owner, save ? 1 : 0, pickFolder ? 1 : 0, t, fn, fs, dn, de, f, &out,
+                                tw_file_dialog(raw(owner), save ? 1 : 0, pickFolder ? 1 : 0, t, fn, fs, dn, de, f, &out,
                                                Int32(out.count))
                             }
                         }

@@ -5,6 +5,8 @@
 // in-box ConPTY on older Windows 10 builds mishandles several sequences; Microsoft publishes the
 // current one (the same that Windows Terminal ships) as a redistributable.
 
+#include <windows.h>
+
 #include "CTermsieWin.h"
 
 #include <stdlib.h>

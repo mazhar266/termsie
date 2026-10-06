@@ -239,6 +239,11 @@ enum Win {
 @inline(__always) func yParam(_ l: LPARAM) -> Int32 { Int32(Int16(bitPattern: HIWORD(l))) }
 @inline(__always) func wheelDelta(_ w: WPARAM) -> Int32 { Int32(Int16(bitPattern: HIWORD(w))) }
 
+/// A Win32 handle as the opaque pointer the C layer takes.
+@inline(__always) func raw<T>(_ p: UnsafeMutablePointer<T>?) -> UnsafeMutableRawPointer? {
+    p.map { UnsafeMutableRawPointer($0) }
+}
+
 func makeIntResource(_ id: Int) -> UnsafePointer<WCHAR>? {
     UnsafePointer<WCHAR>(bitPattern: id)
 }

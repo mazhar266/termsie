@@ -37,7 +37,7 @@ final class SpikeWindow: Window {
 
     private func setUp() {
         let config = ConfigStore.shared.config
-        _ = tw_window_set_appearance(hwnd, 1, 1)
+        _ = tw_window_set_appearance(raw(hwnd), 1, 1)
         renderer = Renderer(window: self)
         renderer?.syncSize()
         let spec = config.resolvedFontSpec(family: nil, size: nil)

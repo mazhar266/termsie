@@ -9,13 +9,15 @@
 #ifndef CTERMSIEWIN_H
 #define CTERMSIEWIN_H
 
-#include <windows.h>
-// Swift imports this header as a module, where windows.h does not re-export its parts:
-// each type used below is pulled in from the header that declares it.
-#include <minwindef.h>
-#include <windef.h>
-#include <winnt.h>
+// Deliberately free of Windows headers. Swift imports this header as a Clang module, and under
+// modules windows.h leaks its include guards without its declarations, so HWND and friends
+// would be unusable here. Handles are passed as opaque pointers and the C++ casts them; the
+// integer types are spelled as the Windows typedefs define them (unsigned long is unsigned long).
+#include <stddef.h>
 #include <stdint.h>
+
+typedef void *TWWindowHandle;
+typedef void *TWMenuHandle;
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,7 +31,7 @@ void tw_process_init(void);
 
 /// The Windows build number (e.g. 22631), read from the kernel rather than the compatibility
 /// shim GetVersionEx applies.
-DWORD tw_windows_build(void);
+unsigned long tw_windows_build(void);
 
 // ---------------------------------------------------------------------------------------------
 // Rendering
@@ -51,17 +53,17 @@ typedef struct TWFontMetrics {
 
 /// A renderer drawing into `hwnd` through a DirectComposition swap chain, so pixels with alpha
 /// below 1 show the window backdrop through. Falls back to WARP when there is no GPU.
-TWRenderer *tw_renderer_create(HWND hwnd);
+TWRenderer *tw_renderer_create(TWWindowHandle hwnd);
 void tw_renderer_destroy(TWRenderer *r);
 /// Size in physical pixels and the DPI to draw at (96 = 100%).
-void tw_renderer_resize(TWRenderer *r, UINT width, UINT height, float dpi);
+void tw_renderer_resize(TWRenderer *r, unsigned int width, unsigned int height, float dpi);
 /// 1 on success. Drawing calls are only valid between begin and end.
 int tw_renderer_begin(TWRenderer *r);
 /// 1 on success, 0 if the device was lost: recreate the renderer and draw again.
 int tw_renderer_end(TWRenderer *r);
 /// Draws the next frame into an offscreen bitmap instead of the window, and `tw_snapshot_end`
 /// writes it as a PNG. Used by the headless test driver. Size in physical pixels.
-int tw_snapshot_begin(TWRenderer *r, UINT width, UINT height, float dpi);
+int tw_snapshot_begin(TWRenderer *r, unsigned int width, unsigned int height, float dpi);
 int tw_snapshot_end(TWRenderer *r, const wchar_t *pngPath);
 
 void tw_clear(TWRenderer *r, TWColor c);
@@ -108,8 +110,16 @@ float tw_measure_text(TWFont *f, const wchar_t *text, int len);
 
 /// Dark title bar and, on Windows 11, the acrylic backdrop behind translucent pixels.
 /// Returns 1 when a backdrop is in effect, so the caller knows translucency will show.
-int tw_window_set_appearance(HWND hwnd, int dark, int backdrop);
-void tw_window_set_icon(HWND hwnd, const wchar_t *icoPath);
+int tw_window_set_appearance(TWWindowHandle hwnd, int dark, int backdrop);
+void tw_window_set_icon(TWWindowHandle hwnd, const wchar_t *icoPath);
+/// Places the input method's composition window at a point in client pixels, so text being
+/// composed (Chinese, Japanese, Korean input) appears at the terminal's cursor.
+void tw_ime_set_position(TWWindowHandle hwnd, int x, int y, int lineHeight);
+/// Shows a popup menu at a point in screen pixels and returns the chosen item's id, 0 for none.
+/// (TrackPopupMenu returns the id through a BOOL, which Swift imports as a truth value.)
+int tw_track_menu(TWWindowHandle owner, TWMenuHandle menu, int x, int y);
+/// Turns the popup menus dark, using the same uxtheme switch Explorer and Notepad use.
+void tw_menus_use_dark_mode(int dark);
 
 // ---------------------------------------------------------------------------------------------
 // Pseudo console
@@ -120,15 +130,15 @@ typedef struct TWPty TWPty;
 /// (a double-NUL-terminated block of NAME=value strings) may be NULL to inherit. On failure
 /// returns NULL and sets `*error` to the Win32 error code.
 TWPty *tw_pty_spawn(const wchar_t *commandLine, const wchar_t *cwd, const wchar_t *environment,
-                    short cols, short rows, DWORD *error);
+                    short cols, short rows, unsigned long *error);
 /// Blocking read of the console's output. Returns the byte count, 0 at end of stream.
-int tw_pty_read(TWPty *p, void *buffer, DWORD capacity);
+int tw_pty_read(TWPty *p, void *buffer, unsigned long capacity);
 /// Writes input to the console. Returns 1 on success.
-int tw_pty_write(TWPty *p, const void *data, DWORD length);
+int tw_pty_write(TWPty *p, const void *data, unsigned long length);
 void tw_pty_resize(TWPty *p, short cols, short rows);
-DWORD tw_pty_pid(TWPty *p);
+unsigned long tw_pty_pid(TWPty *p);
 /// Waits for the child to exit. Returns 1 and sets `*exitCode` when it has, 0 on timeout.
-int tw_pty_wait(TWPty *p, DWORD timeoutMs, DWORD *exitCode);
+int tw_pty_wait(TWPty *p, unsigned long timeoutMs, unsigned long *exitCode);
 /// Closes the pseudo console, which ends the read loop. Safe to call from any thread, once.
 void tw_pty_close(TWPty *p);
 /// Ends the child and every process it started.
@@ -140,23 +150,23 @@ void tw_pty_free(TWPty *p);
 // Processes
 
 typedef struct TWProcessInfo {
-    DWORD pid;
-    DWORD parentPid;
-    wchar_t name[MAX_PATH];
+    unsigned long pid;
+    unsigned long parentPid;
+    wchar_t name[260];
 } TWProcessInfo;
 
 /// Every process on the system, in the order the kernel lists them. Returns the count written.
 int tw_list_processes(TWProcessInfo *out, int capacity);
 /// The full command line of a process the user owns. Returns its length, 0 when unreadable.
-int tw_process_command_line(DWORD pid, wchar_t *out, int capacity);
+int tw_process_command_line(unsigned long pid, wchar_t *out, int capacity);
 /// The executable path of a process. Returns its length, 0 when unreadable.
-int tw_process_image_path(DWORD pid, wchar_t *out, int capacity);
+int tw_process_image_path(unsigned long pid, wchar_t *out, int capacity);
 
 // ---------------------------------------------------------------------------------------------
 // Credential Manager
 
 /// Stores `blob` as a generic credential named `target`. Returns 1 on success.
-int tw_cred_write(const wchar_t *target, const wchar_t *comment, const void *blob, DWORD length);
+int tw_cred_write(const wchar_t *target, const wchar_t *comment, const void *blob, unsigned long length);
 /// Reads a credential. Returns the blob length and a buffer to free with `tw_free`, or -1 when
 /// there is no such credential.
 int tw_cred_read(const wchar_t *target, void **blob);
@@ -165,9 +175,9 @@ int tw_cred_delete(const wchar_t *target);
 // ---------------------------------------------------------------------------------------------
 // Shell, clipboard, dialogs
 
-int tw_clipboard_set_text(HWND owner, const wchar_t *text, int len);
+int tw_clipboard_set_text(TWWindowHandle owner, const wchar_t *text, int len);
 /// The clipboard's text, to free with `tw_free`, or NULL.
-wchar_t *tw_clipboard_get_text(HWND owner);
+wchar_t *tw_clipboard_get_text(TWWindowHandle owner);
 void tw_free(void *p);
 
 /// Opens a file, folder or URL with its default handler.
@@ -177,7 +187,7 @@ int tw_shell_reveal(const wchar_t *folder, const wchar_t *file);
 
 /// The standard open/save dialog. `filterSpec` like L"*.json". Returns 1 and writes the chosen
 /// path to `out` when the user chose one.
-int tw_file_dialog(HWND owner, int save, int pickFolder, const wchar_t *title, const wchar_t *filterName,
+int tw_file_dialog(TWWindowHandle owner, int save, int pickFolder, const wchar_t *title, const wchar_t *filterName,
                    const wchar_t *filterSpec, const wchar_t *defaultName, const wchar_t *defaultExtension,
                    const wchar_t *initialFolder, wchar_t *out, int capacity);
 

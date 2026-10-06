@@ -9,6 +9,8 @@
 // so a grid stays a grid however the font's own advances round. Characters the font lacks are
 // drawn one by one through a text layout, which brings in DirectWrite's font fallback.
 
+#include <windows.h>
+
 #include "CTermsieWin.h"
 
 #include <d3d11.h>
@@ -275,7 +277,8 @@ static bool createDevice(TWRenderer *r) {
     return SUCCEEDED(r->dc->CreateSolidColorBrush(D2D1::ColorF(0, 0, 0, 1), &r->brush));
 }
 
-extern "C" TWRenderer *tw_renderer_create(HWND hwnd) {
+extern "C" TWRenderer *tw_renderer_create(TWWindowHandle hwnd_handle) {
+    HWND hwnd = (HWND)hwnd_handle;
     if (!hwnd) return nullptr;
     TWRenderer *r = new TWRenderer();
     r->hwnd = hwnd;
