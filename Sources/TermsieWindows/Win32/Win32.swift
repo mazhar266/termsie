@@ -378,7 +378,7 @@ enum Log {
             try? FileManager.default.removeItem(at: url)
         }
         if !FileManager.default.fileExists(atPath: url.path) {
-            FileManager.default.createFile(atPath: url.path, contents: nil)
+            _ = FileManager.default.createFile(atPath: url.path, contents: nil)
         }
         let h = try? FileHandle(forWritingTo: url)
         _ = try? h?.seekToEnd()
@@ -400,7 +400,7 @@ enum DebugOutput {
     static var stream: FileHandle?
 
     static func open(path: String) {
-        FileManager.default.createFile(atPath: path, contents: nil)
+        _ = FileManager.default.createFile(atPath: path, contents: nil)
         stream = FileHandle(forWritingAtPath: path)
     }
 

@@ -1,6 +1,7 @@
 import Foundation
 import WinSDK
 import CTermsieWin
+import TermsieCore
 
 /// A Swift object behind an HWND. Subclasses override `handle` and return nil for anything they
 /// leave to `DefWindowProc`.
@@ -125,7 +126,7 @@ class Window {
 
     var isVisible: Bool {
         guard let hwnd else { return false }
-        return IsWindowVisible(hwnd).boolValue && !IsIconic(hwnd).boolValue
+        return IsWindowVisible(hwnd) && !IsIconic(hwnd)
     }
 }
 
@@ -288,10 +289,10 @@ enum MessageLoop {
             // Waking at least four times a second lets Foundation's run loop (and the main dispatch
             // queue some libraries post to) make progress even when no window message arrives.
             _ = MsgWaitForMultipleObjectsEx(0, nil, 250, Win.QS_ALLINPUT, Win.MWMO_INPUTAVAILABLE)
-            while PeekMessageW(&msg, nil, 0, 0, Win.PM_REMOVE).boolValue {
+            while PeekMessageW(&msg, nil, 0, 0, Win.PM_REMOVE) {
                 if msg.message == Win.WM_QUIT { return Int32(truncatingIfNeeded: msg.wParam) }
                 if isKeyMessage(msg.message), let filter = keyFilter, filter(&msg) { continue }
-                if let dialog = dialogs.first(where: { IsDialogMessageW($0, &msg).boolValue }) {
+                if let dialog = dialogs.first(where: { IsDialogMessageW($0, &msg) }) {
                     _ = dialog
                     continue
                 }
