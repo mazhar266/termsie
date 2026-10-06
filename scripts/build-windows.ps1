@@ -102,6 +102,25 @@ Say "swift build"
 if ($LASTEXITCODE -ne 0) { throw "swift build failed" }
 $bin = (& swift build -c $Configuration --product Termsie @tripleArgs --show-bin-path).Trim()
 
+# The machine a PE file was built for, from its header: 0x8664 x64, 0xAA64 ARM64.
+function Get-PEMachine([string]$path) {
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $pe = [BitConverter]::ToInt32($bytes, 0x3C)
+    return [BitConverter]::ToUInt16($bytes, $pe + 4)
+}
+$wantedMachine = if ($Arch -eq "arm64") { 0xAA64 } else { 0x8664 }
+$exe = Join-Path $bin "Termsie.exe"
+if (-not (Test-Path $exe) -or (Get-PEMachine $exe) -ne $wantedMachine) {
+    # Cross builds do not always land where --show-bin-path says; take the newest build of the
+    # right machine type.
+    $found = Get-ChildItem (Join-Path $root ".build") -Recurse -Filter Termsie.exe -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -match "release" -and (Get-PEMachine $_.FullName) -eq $wantedMachine } |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $found) { throw "no $Arch Termsie.exe was built" }
+    $bin = $found.DirectoryName
+    Write-Host "  using $bin"
+}
+
 # ---------------------------------------------------------------------------------- stage
 $stage = Join-Path $root "dist\windows\$Arch\Termsie"
 Say "Staging $stage"

@@ -1,6 +1,46 @@
 # Releasing Termsie on Windows — investigation and plan
 
-*Written 2026-10-06 against commit c397858 (0.8.0). Not committed; a working draft.*
+*Written 2026-10-06 against commit c397858 (0.8.0). The plan below was then carried out on the
+`windows-port` branch; this first section records the outcome, and the rest is the plan as
+written, with corrections marked.*
+
+## 0. Outcome
+
+All six phases are done on `windows-port`. CI builds and tests the shared core on Linux, macOS
+and Windows, builds the macOS app and runs its shim test, and builds, drives and packages the
+Windows app on every push. User-facing documentation is in [windows.md](windows.md).
+
+| Phase | Result |
+| --- | --- |
+| 0. Spike | Passed on the GitHub Windows runner: Swift 6.4, a C++ target for Direct2D/DirectWrite on a DirectComposition swap chain, ConPTY running PowerShell, SwiftTerm drawing, PNG snapshots. Decision: Option A. |
+| 1. Package split | `TermsieCore` (Foundation and SwiftTerm only) shared by both apps; the macOS app builds on it unchanged in behaviour; 51 core tests on three platforms. |
+| 2. Terminal view | Cell-exact DirectWrite glyph runs with font fallback, colours, styles, wide characters, selection, scrollback, find, mouse reporting, IME positioning, clipboard. |
+| 3. Application shell | Tabs, terminal list (thumbnails, width stages, reorder, copy tools), floating canvas (drag, resize, snap, tile, cascade, halves, maximize, collapse), menus, shortcuts, Terminal / Workspace / global Settings dialogs, Credential Manager secrets, config watching, sessions and workspaces. |
+| 4. Shell integration | A generated PowerShell script (history, startup commands, OSC 133 marks, OSC 7 folder) for PowerShell 7 and 5.1, loaded so execution policy cannot block it; bash for Git Bash; typed fallback for cmd; `WSLENV` for WSL. `test-shim.ps1` checks it. |
+| 5. Release engineering | `build-windows.ps1` (resources, runtimes, bundled ConPTY), `release-windows.ps1` (Authenticode by certificate or Azure Trusted Signing, zip, MSIX, checksums, GitHub upload, winget manifests), a manual release workflow, and a signature-pinned updater. |
+| 6. Headless tests | `test-windows.ps1` drives the real app through a scripted driver: 29 checks over shell, lifecycle, startup commands, secrets, copy tools, kept output and sessions, history, cmd, workspace JSON, list stages and thumbnail cost. |
+
+What is left for a person to do: obtain a code-signing identity (a certificate, or an Azure
+Trusted Signing account) and set the release workflow's secrets; publish a first signed release
+and submit the winget manifests it writes; decide whether the ARM64 build, reported in CI but
+not yet required, becomes required.
+
+Things learned on the way, worth knowing before changing the Windows code:
+
+- **SwiftTerm 1.20.0 has no portable render snapshot** (2.2 below said it had; that is on its
+  main branch, not in the release). The Windows view reads the buffer through `Terminal`'s
+  public API instead.
+- **SwiftTerm's build plugin crashes on Windows**: it starts its generator with an environment
+  of four variables, so Foundation's `Process` cannot start Winsock. Setting those four variables
+  (`scripts/swiftterm-build-info.ps1`) means it never runs git.
+- **Clang modules and `windows.h`**: a header Swift imports must not rely on `windows.h`, whose
+  declarations are not visible through it under modules. `CTermsieWin.h` uses opaque handles.
+- **ConPTY clears the screen when it attaches** unless started with
+  `PSEUDOCONSOLE_INHERIT_CURSOR`, which would wipe kept output. Termsie starts it that way.
+- **Swift 6.4 imports `BOOL` as `Bool`**, so `TrackPopupMenu`'s command id is lost;
+  `tw_track_menu` returns it as an integer.
+- **The main dispatch queue is not drained by a Win32 message loop**; shared code schedules
+  through `MainScheduler`, which the Windows app routes through its own message-only window.
 
 ## 1. The short version
 
@@ -41,10 +81,9 @@ Windows release with feature parity on the core experience.
 Termsie pins SwiftTerm 1.20.0, the current latest tag. Its manifest already has
 `#if os(Windows)` branches and excludes the `Apple/`, `Mac/` and `iOS/` directories on
 Windows, so the **emulator core compiles on Windows**: parser, buffers, scrollback, search,
-selection, OSC 133 semantic prompts, Kitty keyboard, Sixel/Kitty graphics decoders. It also
-ships a documented portable hosting layer (`Sources/SwiftTerm/Portable/`,
-`Documentation.docc/PortableHosting.md`) that exposes a `TerminalRenderSnapshot` for hosts that
-draw the screen themselves. That is exactly the hook a Windows view needs.
+selection, OSC 133 semantic prompts, Kitty keyboard, Sixel/Kitty graphics decoders.
+*(Correction: the portable hosting layer with `TerminalRenderSnapshot` exists only on SwiftTerm's
+main branch, not in 1.20.0. The Windows view reads the buffer through the public `Terminal` API.)*
 
 What SwiftTerm does **not** provide on Windows:
 
