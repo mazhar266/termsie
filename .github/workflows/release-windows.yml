@@ -16,8 +16,6 @@ name: Windows release
 # artifact, ready for `wingetcreate submit`.
 
 on:
-  push:
-    branches: [windows-port]
   workflow_dispatch:
     inputs:
       publish:
