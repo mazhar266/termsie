@@ -95,6 +95,7 @@ END
 }
 
 # ---------------------------------------------------------------------------------- build
+. (Join-Path $PSScriptRoot "swiftterm-build-info.ps1")
 $tripleArgs = @()
 if ($Arch -eq "arm64") { $tripleArgs = @("--triple", "aarch64-unknown-windows-msvc") }
 Say "swift build"

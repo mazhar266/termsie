@@ -43,6 +43,9 @@ jobs:
           swift-version: swift-6.4.0-release
           swift-build: 6.4.0-RELEASE
       - run: swift --version
+      - name: SwiftTerm build information without git
+        shell: pwsh
+        run: ./scripts/swiftterm-build-info.ps1 -GitHubEnv
       - uses: actions/cache@v4
         with:
           path: .build
