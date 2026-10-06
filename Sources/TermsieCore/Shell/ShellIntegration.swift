@@ -81,6 +81,8 @@ public enum ShellIntegration {
         public var mode: Mode = .disabled
 
         public static let disabled = Plan()
+
+        public init() {}
     }
 
     /// Shell flags that mean "no rc files" or "not interactive". Shimming those would do nothing

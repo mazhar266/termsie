@@ -233,3 +233,36 @@ final class ShellIntegrationTests: CoreTestCase {
         XCTAssertEqual(plan.shellArgs, ["-l"])
     }
 }
+
+final class CanvasGeometryTests: XCTestCase {
+    func testFractionRoundTripAndReachability() {
+        let g = CanvasGeometry(bounds: CGRect(x: 0, y: 0, width: 1000, height: 600))
+        let f = CGRect(x: 0.1, y: 0.2, width: 0.5, height: 0.5)
+        let r = g.rect(for: f)
+        XCTAssertEqual(r, CGRect(x: 100, y: 120, width: 500, height: 300))
+        XCTAssertEqual(g.fraction(for: r).minX, 0.1, accuracy: 1e-9)
+        // Far off to the right is pulled back until enough of it shows.
+        let off = g.rect(for: CGRect(x: 0.95, y: 0.9, width: 0.5, height: 0.5))
+        XCTAssertLessThanOrEqual(off.minX, 1000 - PaneChrome.keepVisible)
+        XCTAssertLessThanOrEqual(off.minY, 600 - min(PaneChrome.keepVisible, off.height))
+    }
+
+    func testSnapsToNeighbourEdges() {
+        let g = CanvasGeometry(bounds: CGRect(x: 0, y: 0, width: 1000, height: 600))
+        let other = CGRect(x: 500, y: 0, width: 300, height: 300)
+        let proposed = CGRect(x: 205, y: 5, width: 290, height: 200)   // right edge at 495, top at 5
+        let snapped = g.resolve(proposed, others: [other], zone: .move, snapping: true)
+        XCTAssertEqual(snapped.maxX, 500)
+        XCTAssertEqual(snapped.minY, 0)
+        XCTAssertEqual(g.resolve(proposed, others: [other], zone: .move, snapping: false), proposed)
+    }
+
+    func testNeighbourFocus() {
+        let active = CGRect(x: 0, y: 0, width: 100, height: 100)
+        let right = CGRect(x: 120, y: 0, width: 100, height: 100)
+        let below = CGRect(x: 0, y: 120, width: 100, height: 100)
+        XCTAssertEqual(CanvasGeometry.neighbor(of: active, in: [right, below], direction: .right), 0)
+        XCTAssertEqual(CanvasGeometry.neighbor(of: active, in: [right, below], direction: .down), 1)
+        XCTAssertNil(CanvasGeometry.neighbor(of: active, in: [right, below], direction: .left))
+    }
+}

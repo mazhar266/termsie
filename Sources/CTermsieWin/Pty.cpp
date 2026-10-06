@@ -83,7 +83,7 @@ TWPty *tw_pty_spawn(const wchar_t *commandLine, const wchar_t *cwd, const wchar_
     }
 
     TWPty *p = new TWPty();
-    COORD size = {cols > 0 ? cols : 80, rows > 0 ? rows : 24};
+    COORD size = {static_cast<SHORT>(cols > 0 ? cols : 80), static_cast<SHORT>(rows > 0 ? rows : 24)};
     HRESULT hr = api.create(size, inRead, outWrite, 0, &p->console);
     // The console holds its own duplicates; ours would keep the pipes open after it exits.
     CloseHandle(inRead);

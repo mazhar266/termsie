@@ -43,6 +43,8 @@ public final class CommandMarkScanner {
     /// consuming until its terminator. A hostile stream cannot make this allocate.
     private static let maxParams = 64
 
+    public init() {}
+
     public func reset() {
         phase = .ground
         params.removeAll(keepingCapacity: true)
@@ -138,12 +140,14 @@ public enum CommandLifecycle {
 /// The running conclusion drawn from the mark stream: where the shell is, and whether it says
 /// anything about commands starting and ending at all.
 public struct CommandMarkState {
-    private(set) var lifecycle: CommandLifecycle = .unknown
+    public private(set) var lifecycle: CommandLifecycle = .unknown
     /// True once a C or D has been seen. A shell that only marks its prompts (bash, without a
     /// DEBUG trap) never sets this, and the caller decides "is a command running" another way.
-    private(set) var reportsCommandLifecycle = false
+    public private(set) var reportsCommandLifecycle = false
     /// True once any mark has been seen, so prompt rows in the buffer can be trusted.
     public var hasMarks: Bool { lifecycle != .unknown }
+
+    public init() {}
 
     public mutating func apply(_ event: CommandMarkScanner.Event) {
         switch event {

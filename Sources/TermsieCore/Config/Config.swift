@@ -478,7 +478,7 @@ public final class ConfigStore {
     /// Per-terminal state: the shell shims and the private history file.
     public let panesDir: URL
 
-    private(set) var config: TermsieConfig
+    public private(set) var config: TermsieConfig
 
     private init() {
         configDir = ConfigStore.defaultConfigDirectory()
