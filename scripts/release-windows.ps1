@@ -127,6 +127,9 @@ foreach ($a in $Arch) {
     }
     $stage = Join-Path $dist "$a\Termsie"
     if (-not (Test-Path (Join-Path $stage "Termsie.exe"))) { throw "nothing staged in $stage" }
+    if (-not (Test-Path (Join-Path $stage "swiftCore.dll"))) {
+        throw "$stage has no Swift runtime; build $a on a machine with the $a Swift runtime installed"
+    }
 
     Say "Signing $a"
     $binaries = Get-ChildItem $stage -Recurse -Include *.exe, *.dll | Select-Object -ExpandProperty FullName

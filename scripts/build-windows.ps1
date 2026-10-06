@@ -157,18 +157,19 @@ function Find-SwiftRuntime {
     return $null
 }
 $runtime = Find-SwiftRuntime
-if ($Arch -ne "x64" -and $runtime) {
-    # Cross builds take the target's runtime from the SDK rather than the host's.
-    $sdkBin = Get-ChildItem "$env:LOCALAPPDATA\Programs\Swift\Platforms" -Recurse -Directory -Filter "bin" -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -match "aarch64|arm64" -and (Test-Path (Join-Path $_.FullName "swiftCore.dll")) } |
-        Select-Object -First 1
-    $runtime = if ($sdkBin) { $sdkBin.FullName } else { $null }
+if ($runtime -and (Get-PEMachine (Join-Path $runtime "swiftCore.dll")) -ne $wantedMachine) {
+    # A cross build needs the target's runtime, not the host's: look through the whole Swift
+    # installation for a swiftCore.dll of the right machine type.
+    $roots = @("$env:LOCALAPPDATA\Programs\Swift", "$env:ProgramFiles\Swift", "$env:SystemDrive\Library") | Where-Object { Test-Path $_ }
+    $match = Get-ChildItem $roots -Recurse -Filter swiftCore.dll -ErrorAction SilentlyContinue |
+        Where-Object { (Get-PEMachine $_.FullName) -eq $wantedMachine } | Select-Object -First 1
+    $runtime = if ($match) { $match.DirectoryName } else { $null }
 }
 if ($runtime) {
     Write-Host "  Swift runtime: $runtime"
     Get-ChildItem $runtime -Filter *.dll | Copy-Item -Destination $stage
 } else {
-    Write-Warning "Swift runtime DLLs not found: the staged app needs the Swift runtime installed"
+    Write-Warning "Swift runtime DLLs for $Arch not found: install the $Arch Swift runtime, or run this on an $Arch machine"
 }
 
 # The Visual C++ runtime, deployed app-locally as Microsoft allows for these files.
