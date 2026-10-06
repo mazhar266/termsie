@@ -12,10 +12,10 @@ import SwiftTerm
 /// is what keeps it small and self-contained: no cursor movement, no alt-screen, no half-drawn
 /// progress bars, and soft-wrapped rows are rejoined so the text rewraps at whatever width the
 /// terminal reopens with.
-enum OutputSnapshot {
+public enum OutputSnapshot {
     /// Starts the dim rule drawn under restored output.
-    static let ruleMarker = "── restored from"
-    static func url(for key: String) -> URL {
+    public static let ruleMarker = "── restored from"
+    public static func url(for key: String) -> URL {
         PaneStateStore.directory(for: key).appendingPathComponent("output.ansi")
     }
 
@@ -26,30 +26,28 @@ enum OutputSnapshot {
     /// While a full-screen program (an editor, `less`, `top`) is running, the screen that program
     /// replaced cannot be read, so the previous snapshot is left alone rather than overwritten
     /// with the program's own display.
-    static func save(_ terminal: Terminal, key: String, lines: Int, atPrompt: Bool) {
+    public static func save(_ terminal: Terminal, key: String, lines: Int, atPrompt: Bool) {
         guard lines > 0 else { discard(key: key); return }
         guard let text = capture(terminal, lines: lines, dropIdlePrompt: atPrompt) else { return }
         guard !text.isEmpty else { discard(key: key); return }
         let dir = PaneStateStore.directory(for: key)
-        let fm = FileManager.default
         do {
-            try fm.createDirectory(at: dir, withIntermediateDirectories: true,
-                                   attributes: [.posixPermissions: 0o700])
+            try FilePrivacy.createPrivateDirectory(at: dir)
             let target = url(for: key)
             try Data(text.utf8).write(to: target, options: .atomic)
             // Terminal output can hold anything that was printed, so only the user may read it.
-            try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
+            FilePrivacy.restrictToOwner(target)
         } catch {
             NSLog("Termsie: could not save output for \(key): \(error)")
         }
     }
 
-    static func discard(key: String) {
+    public static func discard(key: String) {
         try? FileManager.default.removeItem(at: url(for: key))
     }
 
     /// The saved output, and when it was saved. Nil when there is none.
-    static func load(key: String) -> (text: String, saved: Date?)? {
+    public static func load(key: String) -> (text: String, saved: Date?)? {
         let target = url(for: key)
         guard let data = try? Data(contentsOf: target), !data.isEmpty else { return nil }
         let saved = (try? target.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
@@ -58,7 +56,7 @@ enum OutputSnapshot {
 
     /// Everything a reopening terminal feeds itself before its shell starts: the saved output,
     /// then a dim rule saying when it was from, so old output never passes for new.
-    static func replay(key: String, now: Date = Date()) -> String? {
+    public static func replay(key: String, now: Date = Date()) -> String? {
         guard let saved = load(key: key) else { return nil }
         var out = saved.text
         out += "\u{1b}[0m\r\n"
@@ -82,7 +80,7 @@ enum OutputSnapshot {
     ///
     /// `dropIdlePrompt` is for a shell sitting at its prompt. While a command runs, the rows after
     /// the last prompt are that command and its output, and are kept.
-    static func capture(_ terminal: Terminal, lines: Int, dropIdlePrompt: Bool = true) -> String? {
+    public static func capture(_ terminal: Terminal, lines: Int, dropIdlePrompt: Bool = true) -> String? {
         guard !terminal.isCurrentBufferAlternate else { return nil }
         let cap = TerminalTextCapture(terminal)
         let count = cap.rowCount

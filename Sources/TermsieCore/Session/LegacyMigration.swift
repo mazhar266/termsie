@@ -4,16 +4,16 @@ import Foundation
 ///
 /// The subdivision mirrors the old split view's sizing arithmetic but in unit space, so an
 /// old workspace opens as floating terminals sitting exactly where its split panes used to be.
-enum LegacyMigration {
+public enum LegacyMigration {
     /// Flattens a split tree in reading order. Traversal order fixes both the sidebar order and `z`.
-    static func definitions(from node: LayoutNode) -> [TerminalDefinition] {
+    public static func definitions(from node: LayoutNode) -> [TerminalDefinition] {
         var out: [TerminalDefinition] = []
         flatten(node, into: NSRect(x: 0, y: 0, width: 1, height: 1), &out)
         for i in out.indices { out[i].z = i }
         return out
     }
 
-    static func tabLayout(from node: LayoutNode) -> TabLayout {
+    public static func tabLayout(from node: LayoutNode) -> TabLayout {
         TabLayout(terminals: definitions(from: node))
     }
 

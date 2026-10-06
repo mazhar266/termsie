@@ -6,8 +6,8 @@ import Foundation
 /// It is a byte-level state machine rather than a search over each chunk because the pty delivers
 /// arbitrary slices — a sequence routinely arrives split across two reads. Anything it does not
 /// recognise it ignores; nothing here can alter what the emulator sees.
-final class CommandMarkScanner {
-    enum Event: Equatable {
+public final class CommandMarkScanner {
+    public enum Event: Equatable {
         /// OSC 133;A or ;N — a new prompt is about to be drawn.
         case promptStart
         /// OSC 133;B or ;I — the prompt is written and the shell is taking input.
@@ -24,9 +24,9 @@ final class CommandMarkScanner {
 
     /// An event and the offset just past the sequence that produced it, so a caller that needs to
     /// know the buffer state at that exact point can split its feed there.
-    struct Hit {
-        let event: Event
-        let end: Int
+    public struct Hit {
+        public let event: Event
+        public let end: Int
     }
 
     private enum Phase {
@@ -43,13 +43,13 @@ final class CommandMarkScanner {
     /// consuming until its terminator. A hostile stream cannot make this allocate.
     private static let maxParams = 64
 
-    func reset() {
+    public func reset() {
         phase = .ground
         params.removeAll(keepingCapacity: true)
     }
 
     /// Scans one chunk, returning the marks it found in stream order.
-    func scan(_ bytes: ArraySlice<UInt8>) -> [Hit] {
+    public func scan(_ bytes: ArraySlice<UInt8>) -> [Hit] {
         var hits: [Hit] = []
         var offset = 0
         for byte in bytes {
@@ -128,7 +128,7 @@ final class CommandMarkScanner {
 ///
 /// A shell that emits no marks at all leaves this at `.unknown`, which is the signal to fall back
 /// to what Termsie itself saw the user type.
-enum CommandLifecycle {
+public enum CommandLifecycle {
     case unknown
     case atPrompt
     case running
@@ -137,15 +137,15 @@ enum CommandLifecycle {
 
 /// The running conclusion drawn from the mark stream: where the shell is, and whether it says
 /// anything about commands starting and ending at all.
-struct CommandMarkState {
+public struct CommandMarkState {
     private(set) var lifecycle: CommandLifecycle = .unknown
     /// True once a C or D has been seen. A shell that only marks its prompts (bash, without a
     /// DEBUG trap) never sets this, and the caller decides "is a command running" another way.
     private(set) var reportsCommandLifecycle = false
     /// True once any mark has been seen, so prompt rows in the buffer can be trusted.
-    var hasMarks: Bool { lifecycle != .unknown }
+    public var hasMarks: Bool { lifecycle != .unknown }
 
-    mutating func apply(_ event: CommandMarkScanner.Event) {
+    public mutating func apply(_ event: CommandMarkScanner.Event) {
         switch event {
         case .promptStart, .inputStart:
             lifecycle = .atPrompt
@@ -162,7 +162,7 @@ struct CommandMarkState {
 
     /// Whether the newest prompt in the buffer is the one a command was launched from, rather than
     /// a fresh one waiting for input. `liveJob` covers shells that mark prompts but not commands.
-    func newestPromptOwnsACommand(liveJob: Bool) -> Bool {
+    public func newestPromptOwnsACommand(liveJob: Bool) -> Bool {
         switch lifecycle {
         case .running, .finished: return true
         case .atPrompt: return !reportsCommandLifecycle && liveJob

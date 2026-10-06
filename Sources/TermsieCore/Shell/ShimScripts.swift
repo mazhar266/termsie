@@ -1,16 +1,16 @@
 import Foundation
 
-/// The generated zsh startup files, embedded in the binary rather than shipped as bundle
+/// The generated shell startup files (zsh here, PowerShell in `PowerShellShim.swift`), embedded in the binary rather than shipped as bundle
 /// resources: a resource that fails to load would mean a broken shell, not a missing feature.
 ///
 /// Why these exist at all: setting `ZDOTDIR` makes zsh read `$ZDOTDIR/.zshenv` *instead of*
 /// `~/.zshenv`, so a naive shim silently drops whatever the user's own `.zshenv` does — commonly
 /// their PATH. Each file below therefore points `ZDOTDIR` back at the user's directory, sources
 /// their real file, and only then restores our own.
-enum ShimScripts {
+public enum ShimScripts {
     /// Bump when any script below changes; generated directories carry this and regenerate on
     /// mismatch after an app upgrade.
-    static let version = "3"
+    public static let version = "4"
 
     private static let header = """
     # Termsie shell integration — generated, do not edit. Regenerated when Termsie updates.
@@ -38,7 +38,7 @@ enum ShimScripts {
         """
     }
 
-    static let zshenv = """
+    public static let zshenv = """
     \(header)
 
     \(sourceUserFile(".zshenv"))
@@ -63,7 +63,7 @@ enum ShimScripts {
     fi
     """
 
-    static let zprofile = """
+    public static let zprofile = """
     \(header)
 
     \(sourceUserFile(".zprofile"))
@@ -72,7 +72,7 @@ enum ShimScripts {
     unset __termsie_shim_dir __termsie_user_zdotdir
     """
 
-    static let zshrc = """
+    public static let zshrc = """
     \(header)
 
     __termsie_shim_dir=$ZDOTDIR
@@ -217,7 +217,7 @@ enum ShimScripts {
     fi
     """
 
-    static let zlogin = """
+    public static let zlogin = """
     \(header)
 
     \(sourceUserFile(".zlogin"))
@@ -229,7 +229,8 @@ enum ShimScripts {
     unset __termsie_shim_dir __termsie_user_zdotdir
     """
 
-    static var files: [String: String] {
-        [".zshenv": zshenv, ".zprofile": zprofile, ".zshrc": zshrc, ".zlogin": zlogin]
+    public static var files: [String: String] {
+        [".zshenv": zshenv, ".zprofile": zprofile, ".zshrc": zshrc, ".zlogin": zlogin,
+         powerShellFileName: powerShell]
     }
 }

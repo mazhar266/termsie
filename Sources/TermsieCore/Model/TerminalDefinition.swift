@@ -5,41 +5,41 @@ import Foundation
 /// The `id` is deliberately used for three purposes at once — sidebar row identity, canvas identity,
 /// and the shell history key — which is what lets a terminal's command history survive being closed,
 /// reopened, and relaunched.
-struct TerminalDefinition: Codable, Equatable {
+public struct TerminalDefinition: Codable, Equatable {
     /// Stable across close/reopen/relaunch. Also names this terminal's history directory.
-    var id: String
+    public var id: String
     /// `nil` means "derive from the running process", matching the pane header's own fallback chain.
-    var name: String?
+    public var name: String?
     /// The *configured* startup directory, stored tilde-preserving. Never overwritten by the live cwd.
-    var cwd: String?
+    public var cwd: String?
     /// Commands run once, in order, when the terminal opens.
-    var startupCommands: [String] = []
+    public var startupCommands: [String] = []
     /// Whether `startupCommands` run again when the terminal is reopened or the session is restored.
-    var runCommandsOnReopen: Bool = true
+    public var runCommandsOnReopen: Bool = true
     /// Whether this terminal gets its own shell history file.
-    var isolatedHistory: Bool = true
+    public var isolatedHistory: Bool = true
     /// Set in this terminal's shell when it starts, whether or not the startup commands run.
     /// Overrides a workspace variable of the same name.
-    var env: [EnvVar] = []
+    public var env: [EnvVar] = []
     /// Font overrides. Either may be nil to inherit the corresponding global setting.
-    var fontFamily: String?
-    var fontSize: Double?
+    public var fontFamily: String?
+    public var fontSize: Double?
     /// Which configured environment this terminal belongs to, tinting its background.
     /// `nil` or an unknown id means the untinted default.
-    var environment: String?
+    public var environment: String?
     /// Blank margin between this terminal's border and its text, in points. `nil` inherits.
-    var padding: Double?
+    public var padding: Double?
     /// Whether long lines wrap in this terminal. `nil` inherits the global setting.
-    var lineWrap: Bool?
+    public var lineWrap: Bool?
     /// Position on the canvas as `[x, y, width, height]`, fractional 0...1, top-left origin.
     /// Fractional so a layout saved on a large display still opens sensibly on a laptop.
-    var frame: [Double]?
+    public var frame: [Double]?
     /// Canvas stacking order, back to front. Independent of sidebar order.
-    var z: Int = 0
+    public var z: Int = 0
     /// Whether this terminal was live when the session was saved.
-    var openOnRestore: Bool = true
+    public var openOnRestore: Bool = true
 
-    init(id: String = TerminalDefinition.newID(),
+    public init(id: String = TerminalDefinition.newID(),
          name: String? = nil,
          cwd: String? = nil,
          startupCommands: [String] = [],
@@ -53,13 +53,13 @@ struct TerminalDefinition: Codable, Equatable {
         self.z = z
     }
 
-    static func newID() -> String {
+    public static func newID() -> String {
         "t-" + UUID().uuidString.lowercased().prefix(18)
     }
 
     /// Tolerant decode, mirroring `TermsieConfig`: every key optional, every absence a default.
     /// A hand-written `{"cwd": "~/src/api"}` must still produce a usable terminal.
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(String.self, forKey: .id) ?? TerminalDefinition.newID()
         name = try c.decodeIfPresent(String.self, forKey: .name)
@@ -86,7 +86,7 @@ struct TerminalDefinition: Codable, Equatable {
     // MARK: Geometry
 
     /// The stored fractional frame, clamped into the unit square. `nil` when unset.
-    var fractionalFrame: NSRect? {
+    public var fractionalFrame: NSRect? {
         get {
             guard let f = frame, f.count == 4 else { return nil }
             return NSRect(x: f[0], y: f[1], width: f[2], height: f[3])
@@ -95,39 +95,39 @@ struct TerminalDefinition: Codable, Equatable {
     }
 
     /// Display name when no live pane can supply a better one.
-    var displayName: String {
+    public var displayName: String {
         if let n = name, !n.isEmpty { return n }
         if let dir = cwd, !dir.isEmpty {
-            let base = ((dir as NSString).expandingTildeInPath as NSString).lastPathComponent
+            let base = HomePath.lastComponent(HomePath.expand(dir))
             if !base.isEmpty { return base }
         }
         return "shell"
     }
 
     /// True when this terminal uses the global font rather than its own.
-    var usesGlobalFont: Bool { fontFamily == nil && fontSize == nil }
+    public var usesGlobalFont: Bool { fontFamily == nil && fontSize == nil }
 
     /// Commands to send on open, honoring `runCommandsOnReopen`.
-    func commands(isReopen: Bool) -> [String] {
+    public func commands(isReopen: Bool) -> [String] {
         if isReopen && !runCommandsOnReopen { return [] }
         return startupCommands.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty && !$0.hasPrefix("#") }
     }
 }
 
 /// One tab's worth of terminals. This replaces `LayoutNode` as the persisted layout unit.
-struct TabLayout: Codable, Equatable {
-    static let currentVersion = 2
+public struct TabLayout: Codable, Equatable {
+    public static let currentVersion = 2
 
-    var version: Int = TabLayout.currentVersion
-    var terminals: [TerminalDefinition] = []
+    public var version: Int = TabLayout.currentVersion
+    public var terminals: [TerminalDefinition] = []
     /// Defaults shared by every terminal in the tab, including its environment variables.
-    var settings = WorkspaceSettings()
+    public var settings = WorkspaceSettings()
     /// Id of the terminal that was focused.
-    var selected: String?
+    public var selected: String?
     /// The workspace this tab came from, so session restore can keep the association.
-    var workspaceName: String?
+    public var workspaceName: String?
 
-    init(terminals: [TerminalDefinition] = [], settings: WorkspaceSettings = WorkspaceSettings(),
+    public init(terminals: [TerminalDefinition] = [], settings: WorkspaceSettings = WorkspaceSettings(),
          selected: String? = nil, workspaceName: String? = nil) {
         self.terminals = terminals
         self.settings = settings
@@ -135,7 +135,7 @@ struct TabLayout: Codable, Equatable {
         self.workspaceName = workspaceName
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decodeIfPresent(Int.self, forKey: .version) ?? TabLayout.currentVersion
         terminals = try c.decodeIfPresent([TerminalDefinition].self, forKey: .terminals) ?? []
@@ -148,7 +148,7 @@ struct TabLayout: Codable, Equatable {
     ///
     /// Stacking order and focus deliberately do not count: both change every time you click a
     /// terminal, and treating that as an edit would leave every workspace permanently "modified".
-    func modificationSignature() -> String {
+    public func modificationSignature() -> String {
         var copy = self
         copy.selected = nil
         copy.workspaceName = nil
@@ -163,15 +163,15 @@ struct TabLayout: Codable, Equatable {
         return String(decoding: data, as: UTF8.self)
     }
 
-    var isEmpty: Bool { terminals.isEmpty }
+    public var isEmpty: Bool { terminals.isEmpty }
 
     /// Every Keychain reference this tab's secrets use.
-    var secretRefs: Set<String> {
+    public var secretRefs: Set<String> {
         Set((settings.env + terminals.flatMap(\.env)).compactMap { $0.secret ? $0.secretRef : nil })
     }
 
     /// A copy with startup commands removed, for the cases that must not re-run anything.
-    func strippingCommands() -> TabLayout {
+    public func strippingCommands() -> TabLayout {
         var copy = self
         for i in copy.terminals.indices { copy.terminals[i].startupCommands = [] }
         return copy
@@ -180,7 +180,7 @@ struct TabLayout: Codable, Equatable {
     /// A copy with fresh ids for the terminals whose id is in `taken` (all of them when nil), so
     /// opening the same workspace twice does not make two live terminals share one history file.
     /// Ids not taken are kept: they are what carries a terminal's history and output over.
-    func regeneratingIDs(avoiding taken: Set<String>? = nil) -> TabLayout {
+    public func regeneratingIDs(avoiding taken: Set<String>? = nil) -> TabLayout {
         var copy = self
         var remap: [String: String] = [:]
         for i in copy.terminals.indices {
@@ -193,7 +193,7 @@ struct TabLayout: Codable, Equatable {
         return copy
     }
 
-    static func single(cwd: String? = nil) -> TabLayout {
+    public static func single(cwd: String? = nil) -> TabLayout {
         TabLayout(terminals: [TerminalDefinition(cwd: cwd, frame: NSRect(x: 0, y: 0, width: 1, height: 1))])
     }
 }

@@ -1,72 +1,66 @@
 import Foundation
-import Security
+
+/// Where secret values actually live. macOS keeps them in the login Keychain, Windows in the
+/// Credential Manager; each front end installs its backend at launch.
+public protocol SecretBackend {
+    func value(for ref: String) -> String?
+    /// Stores a value, replacing any held under the same reference. `label` is what the item is
+    /// called in the system's credential UI, so the user can recognise it there.
+    func setValue(_ value: String, for ref: String, label: String) -> Bool
+    func remove(_ ref: String)
+}
 
 /// Holds the values of secret environment variables, outside every file Termsie writes.
 ///
-/// Values live in the login Keychain as generic passwords under one service, each named by an
-/// opaque reference that the definitions store instead of the value.
+/// Values live in the system credential store, each named by an opaque reference that the
+/// definitions store instead of the value.
 ///
 /// Scripted test runs (`--snapshot` / `--record`) can point it at a JSON file with
-/// `TERMSIE_SECRETS_FILE`, so the suite never touches the user's Keychain. The file backend is
-/// refused outside those runs.
-enum SecretStore {
-    static let service = "com.termsie.app.env"
+/// `TERMSIE_SECRETS_FILE`, so the suite never touches the user's credential store. The file
+/// backend is refused outside those runs.
+public enum SecretStore {
+    public static let service = "com.termsie.app.env"
 
-    static func newRef() -> String {
+    /// The platform's store. Until one is installed, secrets cannot be read or written, which
+    /// the callers already treat as "not found".
+    public static var backend: SecretBackend?
+    /// True for a scripted test run; only then is `TERMSIE_SECRETS_FILE` honoured.
+    public static var testModeEnabled = false
+    /// The tabs open right now, as they would be saved. A reference still used by one of them
+    /// is never deleted.
+    public static var openTabs: () -> [TabLayout] = { [] }
+
+    public static func newRef() -> String {
         "s-" + UUID().uuidString.lowercased()
     }
 
-    static func value(for ref: String) -> String? {
+    public static func value(for ref: String) -> String? {
         if let url = testFileURL { return readTestFile(url)[ref] }
-        var query = baseQuery(ref)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        return backend?.value(for: ref)
     }
 
-    /// Stores a value, replacing any held under the same reference. `label` is what the item is
-    /// called in Keychain Access, so the user can recognise it there.
     @discardableResult
-    static func setValue(_ value: String, for ref: String, label: String) -> Bool {
+    public static func setValue(_ value: String, for ref: String, label: String) -> Bool {
         if let url = testFileURL {
             var all = readTestFile(url)
             all[ref] = value
             return writeTestFile(all, to: url)
         }
-        let data = Data(value.utf8)
-        let update: [String: Any] = [kSecValueData as String: data, kSecAttrLabel as String: label]
-        let status = SecItemUpdate(baseQuery(ref) as CFDictionary, update as CFDictionary)
-        if status == errSecSuccess { return true }
-        guard status == errSecItemNotFound else {
-            NSLog("Termsie: could not update secret \(ref): \(status)")
+        guard let backend else {
+            NSLog("Termsie: no secret store available; \(ref) not saved")
             return false
         }
-        var add = baseQuery(ref)
-        add[kSecValueData as String] = data
-        add[kSecAttrLabel as String] = label
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
-        let added = SecItemAdd(add as CFDictionary, nil)
-        if added != errSecSuccess { NSLog("Termsie: could not store secret \(ref): \(added)") }
-        return added == errSecSuccess
+        return backend.setValue(value, for: ref, label: label)
     }
 
-    static func remove(_ ref: String) {
+    public static func remove(_ ref: String) {
         if let url = testFileURL {
             var all = readTestFile(url)
             all.removeValue(forKey: ref)
             writeTestFile(all, to: url)
             return
         }
-        SecItemDelete(baseQuery(ref) as CFDictionary)
-    }
-
-    private static func baseQuery(_ ref: String) -> [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service,
-         kSecAttrAccount as String: ref]
+        backend?.remove(ref)
     }
 
     // MARK: Clean-up
@@ -82,15 +76,15 @@ enum SecretStore {
     /// Only references somebody explicitly let go of are ever considered. Sweeping every item
     /// under the service instead would delete the secrets of a workspace file kept outside the
     /// workspaces folder, which Termsie has no way to see.
-    static func discard<S: Sequence>(_ refs: S) where S.Element == String {
+    public static func discard<S: Sequence>(_ refs: S) where S.Element == String {
         candidates.formUnion(refs)
         guard !candidates.isEmpty, !sweepScheduled else { return }
         sweepScheduled = true
         // After the current event, so the change that dropped the reference has landed.
-        DispatchQueue.main.async { sweep() }
+        MainScheduler.async { sweep() }
     }
 
-    static func sweep() {
+    public static func sweep() {
         sweepScheduled = false
         guard !candidates.isEmpty else { return }
         let referenced = referencedText()
@@ -105,8 +99,8 @@ enum SecretStore {
     private static func referencedText() -> [String] {
         var texts: [String] = []
         let encoder = JSONEncoder()
-        for controller in AppDelegate.shared.controllers {
-            if let data = try? encoder.encode(controller.snapshot()) {
+        for tab in openTabs() {
+            if let data = try? encoder.encode(tab) {
                 texts.append(String(decoding: data, as: UTF8.self))
             }
         }
@@ -126,7 +120,7 @@ enum SecretStore {
     // MARK: Test backend
 
     private static var testFileURL: URL? {
-        guard DebugDriver.isActive,
+        guard testModeEnabled,
               let path = ProcessInfo.processInfo.environment["TERMSIE_SECRETS_FILE"],
               !path.isEmpty else { return nil }
         return URL(fileURLWithPath: path)

@@ -9,7 +9,7 @@ import Foundation
 // These types are deliberately `Decodable`, not `Codable` — the compiler now prevents anything from
 // writing a v1 file by accident.
 
-enum SplitOrientation: String, Decodable {
+public enum SplitOrientation: String, Decodable {
     /// Children side by side (left/right).
     case horizontal
     /// Children stacked (top/bottom).
@@ -17,20 +17,20 @@ enum SplitOrientation: String, Decodable {
 }
 
 /// A leaf of the old split tree.
-struct PaneSpec: Decodable, Equatable {
-    var title: String?
-    var cwd: String?
-    var command: String?
+public struct PaneSpec: Decodable, Equatable {
+    public var title: String?
+    public var cwd: String?
+    public var command: String?
 }
 
 /// The old split tree. Read-only; see the note above.
-indirect enum LayoutNode: Decodable, Equatable {
+public indirect enum LayoutNode: Decodable, Equatable {
     case pane(PaneSpec)
     case split(orientation: SplitOrientation, sizes: [Double], children: [LayoutNode])
 
     private enum CodingKeys: String, CodingKey { case type, title, cwd, command, orientation, sizes, children }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let type = try c.decodeIfPresent(String.self, forKey: .type) ?? "pane"
         switch type {

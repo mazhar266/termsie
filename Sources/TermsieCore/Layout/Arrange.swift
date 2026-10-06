@@ -1,12 +1,12 @@
-import AppKit
+import Foundation
 
 /// Layout helpers that give back the convenience the split tree used to provide.
 /// Pure geometry over `(canvas, count) -> [NSRect]` so it can be reasoned about without views.
 /// All rects are in the canvas's flipped space: y grows downward, so "top" is the smaller y.
-enum Arrange {
+public enum Arrange {
     /// An even grid, preferring more columns than rows because screens are wide.
     /// Uses cumulative rounding so adjacent tiles share an exact edge with no seam.
-    static func tileGrid(in canvas: NSRect, count n: Int) -> [NSRect] {
+    public static func tileGrid(in canvas: NSRect, count n: Int) -> [NSRect] {
         guard n > 0 else { return [] }
         let cols = max(1, Int(ceil(sqrt(Double(n)))))
         let rows = max(1, Int(ceil(Double(n) / Double(cols))))
@@ -26,7 +26,7 @@ enum Arrange {
     }
 
     /// Overlapping windows stepped down and to the right, wrapping when they run out of room.
-    static func cascade(in canvas: NSRect, count n: Int) -> [NSRect] {
+    public static func cascade(in canvas: NSRect, count n: Int) -> [NSRect] {
         guard n > 0 else { return [] }
         let step = PaneChrome.cascadeStep
         let w = max(PaneChrome.minSize.width, canvas.width * 0.72)
@@ -41,10 +41,10 @@ enum Arrange {
         }
     }
 
-    enum Half { case left, right, top, bottom, full, center }
+    public enum Half { case left, right, top, bottom, full, center }
 
     /// Halves tile the canvas exactly: floor plus subtraction leaves no rounding gap.
-    static func half(_ which: Half, in c: NSRect) -> NSRect {
+    public static func half(_ which: Half, in c: NSRect) -> NSRect {
         let halfW = (c.width / 2).rounded(.down)
         let halfH = (c.height / 2).rounded(.down)
         switch which {
@@ -62,7 +62,7 @@ enum Arrange {
 
     /// Where to put a newly created terminal: the next free cascade slot, offset from whatever is
     /// already there so it never lands exactly on top of an existing window.
-    static func nextSlot(in canvas: NSRect, existing: [NSRect]) -> NSRect {
+    public static func nextSlot(in canvas: NSRect, existing: [NSRect]) -> NSRect {
         let w = max(PaneChrome.minSize.width, canvas.width * 0.62)
         let h = max(PaneChrome.minSize.height, canvas.height * 0.66)
         let step = PaneChrome.cascadeStep

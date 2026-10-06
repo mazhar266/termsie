@@ -1,16 +1,16 @@
 import Foundation
 
 /// Owns the per-terminal state directory that doubles as a zsh `ZDOTDIR`.
-enum PaneStateStore {
-    static func directory(for key: String) -> URL {
+public enum PaneStateStore {
+    public static func directory(for key: String) -> URL {
         ConfigStore.shared.panesDir.appendingPathComponent(sanitize(key), isDirectory: true)
     }
 
-    static func historyFile(for key: String) -> URL {
+    public static func historyFile(for key: String) -> URL {
         directory(for: key).appendingPathComponent(".zsh_history")
     }
 
-    static func sanitize(_ key: String) -> String {
+    public static func sanitize(_ key: String) -> String {
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
         let cleaned = String(key.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" })
         return cleaned.isEmpty ? "default" : String(cleaned.prefix(64))
@@ -19,11 +19,9 @@ enum PaneStateStore {
     /// Creates the directory and writes the shim files if they are absent or stale.
     /// The version stamp is written last, so a half-written shim is never treated as usable.
     @discardableResult
-    static func ensure(key: String) throws -> URL {
+    public static func ensure(key: String) throws -> URL {
         let dir = directory(for: key)
-        let fm = FileManager.default
-        try fm.createDirectory(at: dir, withIntermediateDirectories: true,
-                               attributes: [.posixPermissions: 0o700])
+        try FilePrivacy.createPrivateDirectory(at: dir)
         let stamp = dir.appendingPathComponent(".shim-version")
         if let existing = try? String(contentsOf: stamp, encoding: .utf8),
            existing.trimmingCharacters(in: .whitespacesAndNewlines) == ShimScripts.version {
@@ -32,7 +30,7 @@ enum PaneStateStore {
         for (name, body) in ShimScripts.files {
             let url = dir.appendingPathComponent(name)
             try body.write(to: url, atomically: true, encoding: .utf8)
-            try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            FilePrivacy.restrictToOwner(url)
         }
         try ShimScripts.version.write(to: stamp, atomically: true, encoding: .utf8)
         return dir
@@ -40,7 +38,7 @@ enum PaneStateStore {
 
     /// Deletes state directories for terminals that no longer exist.
     /// Skips anything touched in the last hour so a second running instance is never disturbed.
-    static func prune(keeping liveKeys: Set<String>, retentionDays: Int) {
+    public static func prune(keeping liveKeys: Set<String>, retentionDays: Int) {
         let fm = FileManager.default
         let root = ConfigStore.shared.panesDir
         guard let entries = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
@@ -72,24 +70,30 @@ enum PaneStateStore {
 ///
 /// The governing rule: any uncertainty resolves to doing nothing. A terminal with shared history
 /// is a missing feature; a terminal whose PATH lost half its entries is a broken app.
-enum ShellIntegration {
-    enum Mode: String { case disabled, zsh, bash, fish, histfileOnly }
+public enum ShellIntegration {
+    public enum Mode: String { case disabled, zsh, bash, fish, powershell, histfileOnly }
 
-    struct Plan {
-        var environment: [String: String] = [:]
-        var shellArgs: [String] = []
+    public struct Plan {
+        public var environment: [String: String] = [:]
+        public var shellArgs: [String] = []
         /// True when the shell itself will run the startup commands, so the typed path stays off.
-        var runsStartupCommands = false
-        var mode: Mode = .disabled
+        public var runsStartupCommands = false
+        public var mode: Mode = .disabled
 
-        static let disabled = Plan()
+        public static let disabled = Plan()
     }
 
     /// Shell flags that mean "no rc files" or "not interactive". Shimming those would do nothing
     /// useful and could surprise a user who set them deliberately.
     private static let disqualifyingArgs: Set<String> = ["-f", "--no-rcs", "-d", "--no-globalrcs", "-c", "-s", "--norc", "--noprofile"]
+    /// PowerShell's equivalents: anything that runs a script or command instead of an interactive
+    /// session. Compared lowercased, since PowerShell's own parameters are case-insensitive.
+    private static let powerShellDisqualifyingArgs: Set<String> = [
+        "-command", "-c", "-file", "-f", "-encodedcommand", "-e", "-ec", "-noninteractive", "-noni",
+        "-commandwithargs", "-cwa",
+    ]
 
-    static func prepare(shell: String,
+    public static func prepare(shell: String,
                         shellArgs: [String],
                         paneKey: String,
                         commands: [String],
@@ -100,29 +104,44 @@ enum ShellIntegration {
         plan.shellArgs = shellArgs
 
         guard config.shellIntegration.lowercased() != "off" else { return plan }
-        guard !shellArgs.contains(where: { disqualifyingArgs.contains($0) }) else { return plan }
+        let kind = ShellKind.of(shell)
+        if kind.isPowerShell {
+            let lowered = shellArgs.map { $0.lowercased() }
+            guard !lowered.contains(where: { powerShellDisqualifyingArgs.contains($0) }) else { return plan }
+        } else {
+            guard !shellArgs.contains(where: { disqualifyingArgs.contains($0) }) else { return plan }
+        }
 
-        let name = (shell as NSString).lastPathComponent
         let wantsHistory = isolateHistory && config.history.isolate
         let wantsCommands = !commands.isEmpty && config.startupCommands.mode.lowercased() == "shim"
         // Marks alone are reason enough to shim: they are what the copy tools read, and a
         // terminal with history isolation turned off still wants working copy buttons.
         let wantsMarks = config.copy.commandMarks
-        guard wantsHistory || wantsCommands || wantsMarks else { return plan }
+        // PowerShell is shimmed regardless: its prompt hook is the only way anything outside the
+        // shell can learn the working folder, which `cd` never changes for the process itself.
+        guard wantsHistory || wantsCommands || wantsMarks || kind.isPowerShell else { return plan }
 
-        switch name {
-        case "zsh":
+        switch kind {
+        case .pwsh, .powershell:
+            return powerShellPlan(paneKey: paneKey, commands: commands, wantsHistory: wantsHistory,
+                                  wantsCommands: wantsCommands, wantsMarks: wantsMarks, config: config,
+                                  base: plan)
+        case .zsh:
             return zshPlan(paneKey: paneKey, commands: commands, wantsHistory: wantsHistory,
                            wantsCommands: wantsCommands, wantsMarks: wantsMarks, config: config,
                            inheritedEnv: inheritedEnv, base: plan)
-        case "bash":
+        case .bash:
             return bashPlan(paneKey: paneKey, commands: commands, wantsHistory: wantsHistory,
                             wantsCommands: wantsCommands, wantsMarks: wantsMarks, config: config,
                             inheritedEnv: inheritedEnv, base: plan)
-        case "fish":
+        case .fish:
             return fishPlan(paneKey: paneKey, commands: commands, wantsHistory: wantsHistory,
                             wantsCommands: wantsCommands, base: plan)
-        default:
+        case .cmd, .wsl:
+            // cmd keeps no history file to point anywhere, and WSL shells read their own
+            // environment rather than HISTFILE from Windows; the typed fallback runs commands.
+            return plan
+        case .other:
             guard wantsHistory, config.history.exportHistfileForUnknownShells else { return plan }
             var p = plan
             p.mode = .histfileOnly
@@ -185,8 +204,9 @@ enum ShellIntegration {
         if wantsHistory {
             // Bash reads HISTFILE at startup, so this alone is enough unless the user's rc
             // reassigns it. The prompt hook covers that case.
-            plan.environment["HISTFILE"] = historyPath(paneKey, name: ".bash_history")
-            plan.environment["TERMSIE_HISTFILE"] = historyPath(paneKey, name: ".bash_history")
+            let bashHistory = posixStylePath(historyPath(paneKey, name: ".bash_history"))
+            plan.environment["HISTFILE"] = bashHistory
+            plan.environment["TERMSIE_HISTFILE"] = bashHistory
             hooks.append("""
             if [ -z "$__TERMSIE_PINNED" ]; then __TERMSIE_PINNED=1; HISTFILE="$TERMSIE_HISTFILE"; history -c; history -r; shopt -s histappend; fi; history -a
             """)
@@ -220,6 +240,40 @@ enum ShellIntegration {
         return plan
     }
 
+    // MARK: PowerShell
+
+    private static func powerShellPlan(paneKey: String, commands: [String], wantsHistory: Bool,
+                                       wantsCommands: Bool, wantsMarks: Bool, config: TermsieConfig,
+                                       base: Plan) -> Plan {
+        var plan = base
+        let dir: URL
+        do {
+            dir = try PaneStateStore.ensure(key: paneKey)
+        } catch {
+            NSLog("Termsie: shell integration unavailable (\(error)); terminal starts unmodified")
+            return base
+        }
+        plan.mode = .powershell
+        plan.environment["TERMSIE_SHIM"] = "1"
+        if wantsHistory {
+            plan.environment["TERMSIE_HISTFILE"] = historyPath(paneKey, name: "ConsoleHost_history.txt")
+            plan.environment["TERMSIE_HISTORY_MERGE"] = config.history.mergeToGlobalOnExit ? "1" : "0"
+        }
+        if wantsMarks { plan.environment["TERMSIE_MARKS"] = "1" }
+        if wantsCommands {
+            plan.environment["TERMSIE_STARTUP_COUNT"] = String(commands.count)
+            for (i, cmd) in commands.enumerated() {
+                plan.environment["TERMSIE_STARTUP_\(i + 1)"] = cmd
+            }
+            plan.environment["TERMSIE_STARTUP_ECHO"] = config.startupCommands.echo ? "1" : "0"
+            plan.environment["TERMSIE_STARTUP_RECORD"] = config.startupCommands.recordInHistory ? "1" : "0"
+            plan.runsStartupCommands = true
+        }
+        let script = dir.appendingPathComponent(ShimScripts.powerShellFileName)
+        plan.shellArgs = ShimScripts.powerShellArguments(scriptPath: nativePath(script), userArgs: base.shellArgs)
+        return plan
+    }
+
     // MARK: fish
 
     private static func fishPlan(paneKey: String, commands: [String], wantsHistory: Bool,
@@ -238,6 +292,25 @@ enum ShellIntegration {
     }
 
     private static func historyPath(_ key: String, name: String = ".zsh_history") -> String {
-        PaneStateStore.directory(for: key).appendingPathComponent(name).path
+        nativePath(PaneStateStore.directory(for: key).appendingPathComponent(name))
+    }
+
+    /// A file URL as the platform writes paths: backslashes on Windows.
+    public static func nativePath(_ url: URL) -> String {
+        #if os(Windows)
+        return url.withUnsafeFileSystemRepresentation { $0.map { String(cString: $0) } } ?? url.path
+        #else
+        return url.path
+        #endif
+    }
+
+    /// A Windows path the way MSYS and Cygwin shells (Git Bash) accept it: forward slashes,
+    /// drive letter kept. Unchanged everywhere else.
+    public static func posixStylePath(_ path: String) -> String {
+        #if os(Windows)
+        return path.replacingOccurrences(of: "\\", with: "/")
+        #else
+        return path
+        #endif
     }
 }

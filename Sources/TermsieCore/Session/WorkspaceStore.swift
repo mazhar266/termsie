@@ -1,15 +1,15 @@
 import Foundation
 
 /// A named layout: the terminals of one tab, with their folders and startup commands.
-struct Workspace: Codable {
+public struct Workspace: Codable {
     // Declared explicitly: writing both coder halves suppresses synthesis.
     private enum CodingKeys: String, CodingKey { case version, name, layout }
 
-    var version: Int = TabLayout.currentVersion
-    var name: String
-    var layout: TabLayout
+    public var version: Int = TabLayout.currentVersion
+    public var name: String
+    public var layout: TabLayout
 
-    init(name: String, layout: TabLayout) {
+    public init(name: String, layout: TabLayout) {
         self.name = name
         self.layout = layout
     }
@@ -19,7 +19,7 @@ struct Workspace: Codable {
     /// The version gate is load-bearing, not cosmetic: `LayoutNode` decodes a missing `type` as
     /// `"pane"` and treats every field as optional, so a v2 payload would decode *successfully* as
     /// one empty pane. Sniffing shapes instead of versions would silently discard the user's data.
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
@@ -31,7 +31,7 @@ struct Workspace: Codable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(TabLayout.currentVersion, forKey: .version)
         try c.encode(name, forKey: .name)
@@ -60,19 +60,19 @@ private struct TabEntry: Decodable {
 }
 
 /// Everything needed to bring back the open windows on next launch.
-struct SessionSnapshot: Codable {
-    struct WindowSnapshot: Codable {
+public struct SessionSnapshot: Codable {
+    public struct WindowSnapshot: Codable {
         private enum CodingKeys: String, CodingKey {
             case frame, tabs, selectedTab, sidebarVisible, sidebarWidth
         }
 
-        var frame: [Double]
-        var tabs: [TabLayout]
-        var selectedTab: Int
-        var sidebarVisible: Bool?
-        var sidebarWidth: Double?
+        public var frame: [Double]
+        public var tabs: [TabLayout]
+        public var selectedTab: Int
+        public var sidebarVisible: Bool?
+        public var sidebarWidth: Double?
 
-        init(frame: [Double], tabs: [TabLayout], selectedTab: Int,
+        public init(frame: [Double], tabs: [TabLayout], selectedTab: Int,
              sidebarVisible: Bool? = nil, sidebarWidth: Double? = nil) {
             self.frame = frame
             self.tabs = tabs
@@ -81,7 +81,7 @@ struct SessionSnapshot: Codable {
             self.sidebarWidth = sidebarWidth
         }
 
-        init(from decoder: Decoder) throws {
+        public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             frame = try c.decodeIfPresent([Double].self, forKey: .frame) ?? []
             selectedTab = try c.decodeIfPresent(Int.self, forKey: .selectedTab) ?? 0
@@ -93,36 +93,36 @@ struct SessionSnapshot: Codable {
 
     private enum CodingKeys: String, CodingKey { case version, windows }
 
-    var version: Int = TabLayout.currentVersion
-    var windows: [WindowSnapshot]
+    public var version: Int = TabLayout.currentVersion
+    public var windows: [WindowSnapshot]
 
-    init(windows: [WindowSnapshot]) { self.windows = windows }
+    public init(windows: [WindowSnapshot]) { self.windows = windows }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
         windows = try c.decodeIfPresent([WindowSnapshot].self, forKey: .windows) ?? []
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(TabLayout.currentVersion, forKey: .version)
         try c.encode(windows, forKey: .windows)
     }
 }
 
-enum WorkspaceStore {
+public enum WorkspaceStore {
     private static var encoder: JSONEncoder {
         let e = JSONEncoder()
         e.outputFormatting = [.prettyPrinted, .sortedKeys]
         return e
     }
 
-    static func url(for name: String) -> URL {
+    public static func url(for name: String) -> URL {
         ConfigStore.shared.workspacesDir.appendingPathComponent(name).appendingPathExtension("json")
     }
 
-    static func list() -> [String] {
+    public static func list() -> [String] {
         let dir = ConfigStore.shared.workspacesDir
         let files = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         return files.filter { $0.hasSuffix(".json") }
@@ -130,53 +130,65 @@ enum WorkspaceStore {
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    static func load(name: String) throws -> Workspace {
+    public static func load(name: String) throws -> Workspace {
         let data = try Data(contentsOf: url(for: name))
         var ws = try JSONDecoder().decode(Workspace.self, from: data)
         if ws.name.isEmpty { ws.name = name }
         return ws
     }
 
-    static func load(fileURL: URL) throws -> Workspace {
+    public static func load(fileURL: URL) throws -> Workspace {
         let data = try Data(contentsOf: fileURL)
         var ws = try JSONDecoder().decode(Workspace.self, from: data)
         if ws.name.isEmpty { ws.name = fileURL.deletingPathExtension().lastPathComponent }
         return ws
     }
 
-    static func save(_ workspace: Workspace) throws {
+    public static func save(_ workspace: Workspace) throws {
         var ws = workspace
-        ws.name = workspace.name.replacingOccurrences(of: "/", with: "-")
+        ws.name = fileSafeName(workspace.name)
         try encoder.encode(ws).write(to: url(for: ws.name), options: .atomic)
+    }
+
+    /// A workspace name usable as a file name on every platform. `/` was always replaced; Windows
+    /// refuses several more characters in a file name.
+    public static func fileSafeName(_ name: String) -> String {
+        #if os(Windows)
+        let forbidden = Set("/\\:*?\"<>|")
+        #else
+        let forbidden: Set<Character> = ["/"]
+        #endif
+        return String(name.map { forbidden.contains($0) ? "-" : $0 })
     }
 
     // MARK: Session
 
-    private static var sessionWork: DispatchWorkItem?
+    /// Bumped by every schedule, save and clear; a pending save that finds it moved on is stale.
+    private static var sessionGeneration = 0
 
     /// Debounced: the sidebar changes state far more often than the old layout did.
-    static func scheduleSessionSave(_ provider: @escaping () -> SessionSnapshot) {
-        sessionWork?.cancel()
-        let work = DispatchWorkItem { saveSession(provider()) }
-        sessionWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: work)
+    public static func scheduleSessionSave(_ provider: @escaping () -> SessionSnapshot) {
+        sessionGeneration += 1
+        let generation = sessionGeneration
+        MainScheduler.after(2.0) {
+            guard generation == sessionGeneration else { return }
+            saveSession(provider())
+        }
     }
 
-    static func saveSession(_ snapshot: SessionSnapshot) {
-        sessionWork?.cancel()
-        sessionWork = nil
+    public static func saveSession(_ snapshot: SessionSnapshot) {
+        sessionGeneration += 1
         guard let data = try? encoder.encode(snapshot) else { return }
         try? data.write(to: ConfigStore.shared.sessionURL, options: .atomic)
     }
 
-    static func loadSession() -> SessionSnapshot? {
+    public static func loadSession() -> SessionSnapshot? {
         guard let data = try? Data(contentsOf: ConfigStore.shared.sessionURL) else { return nil }
         return try? JSONDecoder().decode(SessionSnapshot.self, from: data)
     }
 
-    static func clearSession() {
-        sessionWork?.cancel()
-        sessionWork = nil
+    public static func clearSession() {
+        sessionGeneration += 1
         try? FileManager.default.removeItem(at: ConfigStore.shared.sessionURL)
     }
 }

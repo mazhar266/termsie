@@ -6,65 +6,93 @@ import Foundation
 ///
 /// Geometry, stacking and open/closed state are deliberately not part of it. They belong to the
 /// canvas, and a document that carried them would fight every drag made while the panel is open.
-struct WorkspaceDocument: Equatable {
-    struct Variable: Equatable {
-        var name: String
+public struct WorkspaceDocument: Equatable {
+    public struct Variable: Equatable {
+        public var name: String
         /// A plain variable's value. For a secret, a new value waiting to be stored; nil keeps
         /// the stored one. Never rendered to JSON for a secret.
-        var value: String?
-        var secret: Bool
+        public var value: String?
+        public var secret: Bool
         /// The Keychain item holding a secret's value. Internal: never shown in either view.
-        var ref: String?
+        public var ref: String?
 
-        init(name: String, value: String?, secret: Bool, ref: String? = nil) {
+        public init(name: String, value: String?, secret: Bool, ref: String? = nil) {
             self.name = name; self.value = value; self.secret = secret; self.ref = ref
         }
     }
 
-    struct Defaults: Equatable {
-        var fontFamily: String?
-        var fontSize: Double?
-        var padding: Double?
-        var lineWrap: Bool?
-        var restoredOutputLines: Int?
-        var env: [Variable] = []
+    public struct Defaults: Equatable {
+        public var fontFamily: String?
+        public var fontSize: Double?
+        public var padding: Double?
+        public var lineWrap: Bool?
+        public var restoredOutputLines: Int?
+        public var env: [Variable] = []
+
+        public init(fontFamily: String? = nil, fontSize: Double? = nil, padding: Double? = nil,
+                    lineWrap: Bool? = nil, restoredOutputLines: Int? = nil, env: [Variable] = []) {
+            self.fontFamily = fontFamily
+            self.fontSize = fontSize
+            self.padding = padding
+            self.lineWrap = lineWrap
+            self.restoredOutputLines = restoredOutputLines
+            self.env = env
+        }
     }
 
-    struct Terminal: Equatable {
-        var id: String
-        var name: String?
-        var cwd: String?
-        var environment: String?
-        var startupCommands: [String] = []
-        var runCommandsOnReopen = true
-        var isolatedHistory = true
-        var fontFamily: String?
-        var fontSize: Double?
-        var padding: Double?
-        var lineWrap: Bool?
-        var env: [Variable] = []
+    public struct Terminal: Equatable {
+        public var id: String
+        public var name: String?
+        public var cwd: String?
+        public var environment: String?
+        public var startupCommands: [String] = []
+        public var runCommandsOnReopen = true
+        public var isolatedHistory = true
+        public var fontFamily: String?
+        public var fontSize: Double?
+        public var padding: Double?
+        public var lineWrap: Bool?
+        public var env: [Variable] = []
 
-        var displayName: String {
+        public init(id: String, name: String? = nil, cwd: String? = nil, environment: String? = nil,
+                    startupCommands: [String] = [], runCommandsOnReopen: Bool = true,
+                    isolatedHistory: Bool = true, fontFamily: String? = nil, fontSize: Double? = nil,
+                    padding: Double? = nil, lineWrap: Bool? = nil, env: [Variable] = []) {
+            self.id = id
+            self.name = name
+            self.cwd = cwd
+            self.environment = environment
+            self.startupCommands = startupCommands
+            self.runCommandsOnReopen = runCommandsOnReopen
+            self.isolatedHistory = isolatedHistory
+            self.fontFamily = fontFamily
+            self.fontSize = fontSize
+            self.padding = padding
+            self.lineWrap = lineWrap
+            self.env = env
+        }
+
+        public var displayName: String {
             if let n = name, !n.isEmpty { return n }
             if let dir = cwd, !dir.isEmpty {
-                let base = ((dir as NSString).expandingTildeInPath as NSString).lastPathComponent
+                let base = HomePath.lastComponent(HomePath.expand(dir))
                 if !base.isEmpty { return base }
             }
             return "shell"
         }
     }
 
-    var workspace = Defaults()
-    var terminals: [Terminal] = []
+    public var workspace = Defaults()
+    public var terminals: [Terminal] = []
 
     // MARK: From and to the live model
 
-    init(workspace: Defaults = Defaults(), terminals: [Terminal] = []) {
+    public init(workspace: Defaults = Defaults(), terminals: [Terminal] = []) {
         self.workspace = workspace
         self.terminals = terminals
     }
 
-    init(settings: WorkspaceSettings, definitions: [TerminalDefinition]) {
+    public init(settings: WorkspaceSettings, definitions: [TerminalDefinition]) {
         workspace = Defaults(fontFamily: settings.fontFamily, fontSize: settings.fontSize,
                              padding: settings.padding, lineWrap: settings.lineWrap,
                              restoredOutputLines: settings.restoredOutputLines,
@@ -86,7 +114,7 @@ struct WorkspaceDocument: Equatable {
         EnvVar(name: v.name, value: v.value ?? "", secret: v.secret, secretRef: v.secret ? v.ref : nil)
     }
 
-    var settings: WorkspaceSettings {
+    public var settings: WorkspaceSettings {
         var s = WorkspaceSettings()
         s.fontFamily = workspace.fontFamily
         s.fontSize = workspace.fontSize
@@ -100,7 +128,7 @@ struct WorkspaceDocument: Equatable {
     /// The definitions this document describes, in its order. Fields the document does not carry
     /// (position, stacking, open state) are kept from `existing`; a terminal new to the document
     /// starts from a blank definition.
-    func definitions(merging existing: [TerminalDefinition]) -> [TerminalDefinition] {
+    public func definitions(merging existing: [TerminalDefinition]) -> [TerminalDefinition] {
         let byID = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         return terminals.map { t in
             var def = byID[t.id] ?? TerminalDefinition(id: t.id)
@@ -129,7 +157,7 @@ struct WorkspaceDocument: Equatable {
     /// must stay intact, or Revert could not revert.
     /// - Returns: the references created, so the caller can offer them for clean-up if the
     ///   document is abandoned.
-    mutating func stashSecrets() -> [String] {
+    public mutating func stashSecrets() -> [String] {
         var created: [String] = []
         func stash(_ vars: inout [Variable], owner: String) {
             for i in vars.indices where vars[i].secret {
@@ -150,7 +178,7 @@ struct WorkspaceDocument: Equatable {
 
     /// Gives each secret that arrived without a value the reference its namesake had in
     /// `previous`, so editing the JSON (which never shows references) keeps stored values.
-    mutating func adoptSecretRefs(from previous: WorkspaceDocument) {
+    public mutating func adoptSecretRefs(from previous: WorkspaceDocument) {
         func adopt(_ vars: inout [Variable], from old: [Variable]) {
             for i in vars.indices where vars[i].secret && vars[i].value == nil && vars[i].ref == nil {
                 vars[i].ref = old.first { $0.name == vars[i].name && $0.secret }?.ref
@@ -164,19 +192,19 @@ struct WorkspaceDocument: Equatable {
     }
 
     /// Every reference the document uses.
-    var secretRefs: Set<String> {
+    public var secretRefs: Set<String> {
         Set((workspace.env + terminals.flatMap(\.env)).compactMap { $0.secret ? $0.ref : nil })
     }
 
     // MARK: Validation
 
-    struct Problem: LocalizedError {
-        let message: String
-        var errorDescription: String? { message }
+    public struct Problem: LocalizedError {
+        public let message: String
+        public var errorDescription: String? { message }
     }
 
     /// Everything that would make the document unusable, in reading order.
-    func problems(environments: [String]) -> [String] {
+    public func problems(environments: [String]) -> [String] {
         var out: [String] = []
         if terminals.isEmpty { out.append("a workspace needs at least one terminal") }
         func check(_ vars: [Variable], at path: String) {
@@ -207,7 +235,7 @@ struct WorkspaceDocument: Equatable {
 extension WorkspaceDocument {
     /// Pretty JSON in a fixed, readable key order. Every key is always present — `null` means
     /// "inherit" — so the text documents its own schema for whoever edits it next.
-    func jsonText() -> String {
+    public func jsonText() -> String {
         func vars(_ list: [Variable]) -> JSONValue {
             .array(list.map { v in
                 var fields: [(String, JSONValue)] = [("name", .string(v.name))]
@@ -255,7 +283,7 @@ extension WorkspaceDocument {
     /// dropped — because a misspelt `startupCommand` that vanishes on Apply is worse than one
     /// that is pointed out. Lenient about spelling out defaults: every key but `terminals` may
     /// be left out.
-    init(jsonText: String) throws {
+    public init(jsonText: String) throws {
         let data = Data(jsonText.utf8)
         let root: Any
         do {
@@ -343,7 +371,7 @@ private struct Reader {
     func bool(_ key: String) throws -> Bool? {
         guard let v = present(key) else { return nil }
         // NSNumber bridges both numbers and booleans; only a real JSON boolean is accepted.
-        guard let n = v as? NSNumber, CFGetTypeID(n) == CFBooleanGetTypeID() else {
+        guard let n = v as? NSNumber, JSONShape.isBool(n) else {
             throw fail(key, "true, false or null")
         }
         return n.boolValue
@@ -351,7 +379,7 @@ private struct Reader {
 
     func number(_ key: String, range: ClosedRange<Double>) throws -> Double? {
         guard let v = present(key) else { return nil }
-        guard let n = v as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID() else { throw fail(key, "a number or null") }
+        guard let n = v as? NSNumber, !JSONShape.isBool(n) else { throw fail(key, "a number or null") }
         let d = n.doubleValue
         guard range.contains(d) else { throw fail(key, "between \(String(format: "%g", range.lowerBound)) and \(String(format: "%g", range.upperBound))") }
         return d
@@ -414,7 +442,7 @@ private struct Reader {
     private static func text(_ any: Any, at path: String) throws -> String {
         if let s = any as? String { return s }
         if let n = any as? NSNumber {
-            if CFGetTypeID(n) == CFBooleanGetTypeID() { return n.boolValue ? "true" : "false" }
+            if JSONShape.isBool(n) { return n.boolValue ? "true" : "false" }
             return n.stringValue
         }
         throw WorkspaceDocument.Problem(message: "\(path) must be a string, number or boolean")
