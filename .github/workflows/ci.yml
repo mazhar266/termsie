@@ -74,5 +74,8 @@ jobs:
         if: always()
         with:
           name: termsie-windows-x64-unsigned
-          path: dist/windows/*.zip
+          path: |
+            dist/windows/*.zip
+            dist/windows/*.msix
+            dist/windows/SHA256SUMS-windows.txt
           if-no-files-found: ignore

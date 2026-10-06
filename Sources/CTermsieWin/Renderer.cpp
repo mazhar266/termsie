@@ -218,6 +218,7 @@ struct TWRenderer {
 static void bindTarget(TWRenderer *r) {
     r->dc->SetTarget(nullptr);
     r->target.Reset();
+    if (!r->swap) return;
     ComPtr<IDXGISurface> surface;
     if (FAILED(r->swap->GetBuffer(0, IID_PPV_ARGS(&surface)))) return;
     D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
@@ -263,16 +264,23 @@ static bool createDevice(TWRenderer *r) {
     desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     desc.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
     desc.Scaling = DXGI_SCALING_STRETCH;
-    if (FAILED(factory->CreateSwapChainForComposition(r->d3d.Get(), &desc, nullptr, &r->swap))) return false;
-
-    if (FAILED(DCompositionCreateDevice(r->dxgi.Get(), IID_PPV_ARGS(&r->composition)))) return false;
-    if (FAILED(r->composition->CreateTargetForHwnd(r->hwnd, TRUE, &r->compositionTarget))) return false;
-    if (FAILED(r->composition->CreateVisual(&r->visual))) return false;
-    r->visual->SetContent(r->swap.Get());
-    r->compositionTarget->SetRoot(r->visual.Get());
-    r->composition->Commit();
-
-    bindTarget(r);
+    // Without the desktop window manager (a service session, some remote sessions) there is no
+    // composition. The renderer then draws nothing to the window but can still draw snapshots,
+    // which is all a headless run needs.
+    bool composed = SUCCEEDED(factory->CreateSwapChainForComposition(r->d3d.Get(), &desc, nullptr, &r->swap)) &&
+                    SUCCEEDED(DCompositionCreateDevice(r->dxgi.Get(), IID_PPV_ARGS(&r->composition))) &&
+                    SUCCEEDED(r->composition->CreateTargetForHwnd(r->hwnd, TRUE, &r->compositionTarget)) &&
+                    SUCCEEDED(r->composition->CreateVisual(&r->visual));
+    if (composed) {
+        r->visual->SetContent(r->swap.Get());
+        r->compositionTarget->SetRoot(r->visual.Get());
+        r->composition->Commit();
+        bindTarget(r);
+    } else {
+        OutputDebugStringW(L"Termsie: DirectComposition unavailable; drawing offscreen only.");
+        r->swap.Reset();
+        r->dc->SetDpi(r->dpi, r->dpi);
+    }
     r->dc->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
     return SUCCEEDED(r->dc->CreateSolidColorBrush(D2D1::ColorF(0, 0, 0, 1), &r->brush));
 }
@@ -302,7 +310,7 @@ extern "C" void tw_renderer_resize(TWRenderer *r, UINT width, UINT height, float
     r->dpi = newDpi;
     r->dc->SetTarget(nullptr);
     r->target.Reset();
-    r->swap->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+    if (r->swap) r->swap->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
     bindTarget(r);
 }
 
@@ -321,6 +329,7 @@ extern "C" int tw_renderer_end(TWRenderer *r) {
     r->drawing = false;
     HRESULT hr = r->dc->EndDraw();
     if (hr == D2DERR_RECREATE_TARGET) return 0;
+    if (!r->swap) return 1;
     hr = r->swap->Present(1, 0);
     if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) return 0;
     return 1;
@@ -381,7 +390,7 @@ extern "C" int tw_snapshot_end(TWRenderer *r, const wchar_t *pngPath) {
     r->drawing = false;
     r->snapshotting = false;
     HRESULT hr = r->dc->EndDraw();
-    r->dc->SetTarget(r->target.Get());
+    r->dc->SetTarget(r->target ? r->target.Get() : nullptr);
     r->dc->SetDpi(r->dpi, r->dpi);
     if (FAILED(hr) || !r->snapshot) return 0;
     D2D1_SIZE_U size = r->snapshot->GetPixelSize();

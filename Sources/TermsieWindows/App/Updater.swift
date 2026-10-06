@@ -53,11 +53,13 @@ final class Updater {
         }
     }
 
+    /// The architecture of this build, which is the one its replacement must match.
     static var arch: String {
-        var info = SYSTEM_INFO()
-        GetNativeSystemInfo(&info)
-        // PROCESSOR_ARCHITECTURE_ARM64 = 12
-        return info.wProcessorArchitecture == 12 ? "arm64" : "x64"
+        #if arch(arm64)
+        return "arm64"
+        #else
+        return "x64"
+        #endif
     }
 
     static var executableURL: URL {
