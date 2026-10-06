@@ -20,10 +20,13 @@ Windows app on every push. User-facing documentation is in [windows.md](windows.
 | 5. Release engineering | `build-windows.ps1` (resources, runtimes, bundled ConPTY), `release-windows.ps1` (Authenticode by certificate or Azure Trusted Signing, zip, MSIX, checksums, GitHub upload, winget manifests), a manual release workflow, and a signature-pinned updater. |
 | 6. Headless tests | `test-windows.ps1` drives the real app through a scripted driver: 29 checks over shell, lifecycle, startup commands, secrets, copy tools, kept output and sessions, history, cmd, workspace JSON, list stages and thumbnail cost. |
 
+Both x64 and ARM64 build and pass the same checks in CI; ARM64 runs natively on GitHub's Windows
+ARM runners, because the x64 toolchain has no ARM64 runtime to ship.
+
 What is left for a person to do: obtain a code-signing identity (a certificate, or an Azure
-Trusted Signing account) and set the release workflow's secrets; publish a first signed release
-and submit the winget manifests it writes; decide whether the ARM64 build, reported in CI but
-not yet required, becomes required.
+Trusted Signing account) and set the release workflow's secrets; run the Windows release workflow
+with "publish" for the first signed release and submit the winget manifests it produces; and
+decide whether the ARM64 job, reported in CI but not yet required, becomes required.
 
 Things learned on the way, worth knowing before changing the Windows code:
 

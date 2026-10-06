@@ -25,6 +25,10 @@
     Examples:
       ./scripts/release-windows.ps1 -SkipSign                                  # dry run, x64
       ./scripts/release-windows.ps1 -Version 0.9.0 -Arch x64,arm64 -CertificateThumbprint ABC… -Publish
+
+    ARM64 packages must be built on an ARM64 machine, where the toolchain's own runtime is ARM64.
+    The release workflow builds each architecture on its own runner and then publishes once with
+    -PublishOnly, which uploads the packages already in dist/windows.
 #>
 param(
     [string]$Version,
@@ -39,6 +43,7 @@ param(
     [switch]$SkipSign,
     [switch]$SkipMsix,
     [switch]$Publish,
+    [switch]$PublishOnly,
     [switch]$Force
 )
 $ErrorActionPreference = "Stop"
@@ -67,6 +72,7 @@ $tag = "v$Version"
 $dist = Join-Path $root "dist\windows"
 New-Item -ItemType Directory -Force $dist | Out-Null
 
+if ($PublishOnly) { $Publish = $true; $SkipBuild = $true; $SkipSign = $true }
 if (-not $SkipSign -and -not $CertificateThumbprint -and -not $TrustedSigning) {
     throw "Give -CertificateThumbprint or -TrustedSigning to sign, or -SkipSign for an unsigned dry run."
 }
@@ -120,6 +126,11 @@ function Get-Publisher {
 }
 
 $made = @()
+if ($PublishOnly) {
+    $made = @(Get-ChildItem $dist -File | Where-Object { $_.Name -like "Termsie-$Version-windows-*" } | Select-Object -ExpandProperty FullName)
+    if (-not $made) { throw "no packages for $Version in $dist" }
+    $Arch = @()
+}
 foreach ($a in $Arch) {
     if (-not $SkipBuild) {
         & (Join-Path $PSScriptRoot "build-windows.ps1") -Configuration release -Arch $a -Conpty

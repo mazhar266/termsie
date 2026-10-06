@@ -147,6 +147,13 @@ Signing takes either a certificate in the certificate store (`-CertificateThumbp
 Trusted Signing (`-TrustedSigning metadata.json`). `-SkipSign` makes an unsigned dry run; an
 unsigned copy never updates itself.
 
+ARM64 packages have to be built on an ARM64 machine: the x64 Swift toolchain can cross-compile
+Termsie for ARM64 but carries no ARM64 runtime to ship with it. The **Windows release** workflow
+(Actions ▸ Windows release ▸ Run workflow) does this for you: it builds, signs, packages and
+tests each architecture on a runner of its own kind, then publishes both in one step when
+"publish" is ticked. It signs with Azure Trusted Signing when the secrets listed at the top of
+`.github/workflows/release-windows.yml` are set.
+
 ## How the Windows app is built
 
 - **TermsieCore** is shared with macOS: the model, workspaces and sessions, config, shell
