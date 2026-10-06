@@ -85,10 +85,10 @@ jobs:
           if-no-files-found: ignore
 
   windows-arm64:
-    name: Windows app (ARM64 cross-build)
-    runs-on: windows-latest
-    # Cross-compiling needs the toolchain's ARM64 SDK and Visual Studio's ARM64 tools; it is
-    # reported, not required, until both are on every runner image.
+    name: Windows app (ARM64)
+    # Built natively, so the ARM64 Swift runtime is the toolchain's own. Reported, not required,
+    # while ARM64 runners are newer than the rest.
+    runs-on: windows-11-arm
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -96,14 +96,21 @@ jobs:
         with:
           swift-version: swift-6.4.0-release
           swift-build: 6.4.0-RELEASE
+          build_arch: arm64
       - name: SwiftTerm build information without git
         shell: pwsh
         run: ./scripts/swiftterm-build-info.ps1 -GitHubEnv
-      - name: Build for ARM64
+      - name: Build
         shell: pwsh
-        run: ./scripts/build-windows.ps1 -Configuration release -Arch arm64
+        run: ./scripts/build-windows.ps1 -Configuration release -Arch arm64 -Conpty
+      - name: Drive the app headlessly
+        shell: pwsh
+        run: ./scripts/test-windows.ps1 -Exe dist/windows/arm64/Termsie/Termsie.exe -Out test-output-arm64
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: termsie-windows-arm64-unsigned
-          path: dist/windows/arm64/Termsie
+          name: termsie-windows-arm64
+          path: |
+            dist/windows/arm64/Termsie
+            test-output-arm64
           if-no-files-found: ignore
