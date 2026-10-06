@@ -180,6 +180,9 @@ int tw_clipboard_set_text(TWWindowHandle owner, const wchar_t *text, int len);
 wchar_t *tw_clipboard_get_text(TWWindowHandle owner);
 void tw_free(void *p);
 
+/// Starts a program with no console window, not waiting for it. Returns 1 on success.
+int tw_spawn_detached(const wchar_t *commandLine);
+
 /// Opens a file, folder or URL with its default handler.
 int tw_shell_open(const wchar_t *target);
 /// Shows a folder in Explorer with `file` selected (file may be NULL).

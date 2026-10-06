@@ -229,3 +229,30 @@ final class ConfigTests: CoreTestCase {
         XCTAssertEqual(config.resolvedFontSpec(family: "Consolas", size: 9).family, "Consolas")
     }
 }
+
+final class ReleaseFeedTests: XCTestCase {
+    func testVersions() {
+        XCTAssertTrue(ReleaseFeed.isNewer("0.10.0", than: "0.9.9"))
+        XCTAssertTrue(ReleaseFeed.isNewer("v1.0", than: "0.99.1"))
+        XCTAssertFalse(ReleaseFeed.isNewer("0.8.0", than: "0.8"))
+        XCTAssertFalse(ReleaseFeed.isNewer("0.8.0", than: "0.8.1"))
+    }
+
+    func testParsesAssetsAndDigests() throws {
+        let json = """
+        {"tag_name": "v0.9.0", "html_url": "https://github.com/x/y/releases/tag/v0.9.0", "body": "notes",
+         "assets": [
+          {"name": "Termsie-0.9.0.dmg", "browser_download_url": "https://e/a.dmg", "digest": "sha256:aa"},
+          {"name": "Termsie-0.9.0-windows-x64.zip", "browser_download_url": "https://e/w.zip", "digest": "sha256:bb"},
+          {"name": "Termsie-0.9.0-windows-arm64.zip", "browser_download_url": "https://e/a.zip", "digest": null}
+         ]}
+        """
+        let release = try ReleaseFeed.parse(Data(json.utf8))
+        XCTAssertEqual(release.version, "0.9.0")
+        XCTAssertEqual(release.windowsZip(arch: "x64")?.sha256, "bb")
+        XCTAssertNil(release.windowsZip(arch: "arm64")?.sha256)
+        XCTAssertEqual(release.windowsZip(arch: "arm64")?.url.absoluteString, "https://e/a.zip")
+        XCTAssertThrowsError(try ReleaseFeed.parse(Data("{}".utf8)))
+        XCTAssertEqual(ReleaseFeed.hex([0, 255, 16]), "00ff10")
+    }
+}

@@ -292,6 +292,26 @@ void tw_free(void *p) { free(p); }
 
 // ------------------------------------------------------------------------------------- shell
 
+int tw_spawn_detached(const wchar_t *commandLine) {
+    if (!commandLine) return 0;
+    std::wstring cmd(commandLine);
+    STARTUPINFOW si = {};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi = {};
+    BOOL ok = CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE,
+                             CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB,
+                             nullptr, nullptr, &si, &pi);
+    if (!ok) {
+        // Breaking away from a job is refused inside some job objects; try without.
+        ok = CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP,
+                            nullptr, nullptr, &si, &pi);
+    }
+    if (!ok) return 0;
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return 1;
+}
+
 int tw_shell_open(const wchar_t *target) {
     if (!target) return 0;
     return (INT_PTR)ShellExecuteW(nullptr, L"open", target, nullptr, nullptr, SW_SHOWNORMAL) > 32;

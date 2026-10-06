@@ -55,16 +55,15 @@ if ($rc) {
     $icon = (Resolve-Path "Resources/Windows/Termsie.ico").Path.Replace("\", "\\")
     $manifest = (Resolve-Path "Resources/Windows/Termsie.manifest").Path.Replace("\", "\\")
     @"
-#include <winver.h>
 1 ICON "$icon"
 1 24 "$manifest"
-VS_VERSION_INFO VERSIONINFO
+1 VERSIONINFO
 FILEVERSION $parts
 PRODUCTVERSION $parts
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0x0L
-FILEOS VOS_NT_WINDOWS32
-FILETYPE VFT_APP
+FILEOS 0x40004
+FILETYPE 0x1
 BEGIN
   BLOCK "StringFileInfo"
   BEGIN
