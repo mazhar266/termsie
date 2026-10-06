@@ -96,7 +96,9 @@ END
 # ---------------------------------------------------------------------------------- build
 . (Join-Path $PSScriptRoot "swiftterm-build-info.ps1")
 $tripleArgs = @()
-if ($Arch -eq "arm64") { $tripleArgs = @("--triple", "aarch64-unknown-windows-msvc") }
+# The Swift Build backend (the default since 6.4) does not cross-compile from --triple; the
+# native build system does.
+if ($Arch -eq "arm64") { $tripleArgs = @("--triple", "aarch64-unknown-windows-msvc", "--build-system", "native") }
 Say "swift build"
 & swift build -c $Configuration --product Termsie @tripleArgs @linkerFlags
 if ($LASTEXITCODE -ne 0) { throw "swift build failed" }
@@ -116,7 +118,11 @@ if (-not (Test-Path $exe) -or (Get-PEMachine $exe) -ne $wantedMachine) {
     $found = Get-ChildItem (Join-Path $root ".build") -Recurse -Filter Termsie.exe -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -match "release" -and (Get-PEMachine $_.FullName) -eq $wantedMachine } |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $found) { throw "no $Arch Termsie.exe was built" }
+    if (-not $found) {
+        Get-ChildItem (Join-Path $root ".build") -Recurse -Filter Termsie.exe -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host ("  {0}  machine 0x{1:X4}" -f $_.FullName, (Get-PEMachine $_.FullName)) }
+        throw "no $Arch Termsie.exe was built"
+    }
     $bin = $found.DirectoryName
     Write-Host "  using $bin"
 }
