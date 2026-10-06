@@ -86,7 +86,12 @@ TWPty *tw_pty_spawn(const wchar_t *commandLine, const wchar_t *cwd, const wchar_
 
     TWPty *p = new TWPty();
     COORD size = {static_cast<SHORT>(cols > 0 ? cols : 80), static_cast<SHORT>(rows > 0 ? rows : 24)};
-    HRESULT hr = api.create(size, inRead, outWrite, 0, &p->console);
+    // PSEUDOCONSOLE_INHERIT_CURSOR: the console asks the terminal where its cursor is (DSR 6)
+    // and starts drawing there, rather than clearing the screen. That is what keeps output a
+    // terminal restored from its last session on screen, and it is how Windows Terminal starts
+    // its consoles too. The terminal answers the question itself.
+    const DWORD PSEUDOCONSOLE_INHERIT_CURSOR_FLAG = 0x1;
+    HRESULT hr = api.create(size, inRead, outWrite, PSEUDOCONSOLE_INHERIT_CURSOR_FLAG, &p->console);
     // The console holds its own duplicates; ours would keep the pipes open after it exits.
     CloseHandle(inRead);
     CloseHandle(outWrite);

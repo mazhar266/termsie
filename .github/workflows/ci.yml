@@ -57,7 +57,11 @@ jobs:
       - name: Build the app
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Configuration release -Arch x64
+      - name: PowerShell shim leaves the environment alone
+        shell: pwsh
+        run: ./scripts/test-shim.ps1 -Exe dist/windows/x64/Termsie/Termsie.exe
       - name: Drive the app headlessly
+        if: always()
         shell: pwsh
         run: ./scripts/test-windows.ps1 -Exe dist/windows/x64/Termsie/Termsie.exe -Out test-output
       - name: Package (unsigned)

@@ -35,7 +35,18 @@ enum Alert {
     /// A standard message box. `buttons` picks the Windows set; the response maps its buttons in
     /// reading order.
     static func show(_ title: String, _ message: String, owner: HWND?, style: UINT = Win.MB_OK | Win.MB_ICONINFORMATION) -> Int32 {
-        withWide(message, title) { m, t in MessageBoxW(owner, m, t, style) }
+        // A scripted run has nobody to answer: say what was asked and take the first button,
+        // which for every question here is the one that goes ahead.
+        if DebugDriver.isActive {
+            let oneLine = message.split(whereSeparator: \.isNewline).joined(separator: " ")
+            DebugOutput.print("alert: \(title) — \(oneLine)")
+            switch style & 0x0F {
+            case Win.MB_OKCANCEL: return Win.IDOK
+            case Win.MB_YESNOCANCEL, Win.MB_YESNO: return Win.IDYES
+            default: return Win.IDOK
+            }
+        }
+        return withWide(message, title) { m, t in MessageBoxW(owner, m, t, style) }
     }
 
     static func info(_ title: String, _ message: String, owner: HWND?) {
