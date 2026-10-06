@@ -10,6 +10,11 @@
 #define CTERMSIEWIN_H
 
 #include <windows.h>
+// Swift imports this header as a module, where windows.h does not re-export its parts:
+// each type used below is pulled in from the header that declares it.
+#include <minwindef.h>
+#include <windef.h>
+#include <winnt.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
