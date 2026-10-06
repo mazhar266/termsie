@@ -23,7 +23,7 @@ param(
     [ValidateSet("release", "debug")] [string]$Configuration = "release",
     [ValidateSet("x64", "arm64")] [string]$Arch = "x64",
     [switch]$Conpty,
-    [string]$ConptyVersion = "1.22.250204002"
+    [string]$ConptyVersion = "1.25.260930003"
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot

@@ -56,7 +56,7 @@ jobs:
         run: swift test
       - name: Build the app
         shell: pwsh
-        run: ./scripts/build-windows.ps1 -Configuration release -Arch x64
+        run: ./scripts/build-windows.ps1 -Configuration release -Arch x64 -Conpty
       - name: PowerShell shim leaves the environment alone
         shell: pwsh
         run: ./scripts/test-shim.ps1 -Exe dist/windows/x64/Termsie/Termsie.exe
@@ -82,4 +82,28 @@ jobs:
             dist/windows/*.zip
             dist/windows/*.msix
             dist/windows/SHA256SUMS-windows.txt
+          if-no-files-found: ignore
+
+  windows-arm64:
+    name: Windows app (ARM64 cross-build)
+    runs-on: windows-latest
+    # Cross-compiling needs the toolchain's ARM64 SDK and Visual Studio's ARM64 tools; it is
+    # reported, not required, until both are on every runner image.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: compnerd/gha-setup-swift@v0.5.0
+        with:
+          swift-version: swift-6.4.0-release
+          swift-build: 6.4.0-RELEASE
+      - name: SwiftTerm build information without git
+        shell: pwsh
+        run: ./scripts/swiftterm-build-info.ps1 -GitHubEnv
+      - name: Build for ARM64
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Configuration release -Arch arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termsie-windows-arm64-unsigned
+          path: dist/windows/arm64/Termsie
           if-no-files-found: ignore
