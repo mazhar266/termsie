@@ -1,5 +1,8 @@
 import Foundation
 import SwiftTerm
+#if canImport(Glibc)
+import Glibc
+#endif
 
 extension Notification.Name {
     public static let termsieConfigChanged = Notification.Name("TermsieConfigChanged")
@@ -298,6 +301,10 @@ public struct TermsieConfig: Codable, Equatable {
     public static let defaultFontFamily = "Cascadia Mono"
     /// pwsh and Windows PowerShell take no login flag; `-l` would be read as a script name.
     public static let defaultShellArgs: [String] = []
+    #elseif os(Linux)
+    /// fontconfig's alias for the system's monospaced font, whatever the distribution chose.
+    public static let defaultFontFamily = "monospace"
+    public static let defaultShellArgs: [String] = ["-l"]
     #else
     public static let defaultFontFamily = "Menlo"
     public static let defaultShellArgs: [String] = ["-l"]
@@ -356,7 +363,17 @@ public struct TermsieConfig: Codable, Equatable {
         return ShellLocator.defaultWindowsShell()
         #else
         if let s = ProcessInfo.processInfo.environment["SHELL"], !s.isEmpty { return s }
+        #if os(Linux)
+        // The login shell from the account, then bash, which every distribution has; zsh is
+        // rarely installed by default.
+        if let entry = getpwuid(getuid()), let shell = entry.pointee.pw_shell {
+            let s = String(cString: shell)
+            if !s.isEmpty { return s }
+        }
+        return "/bin/bash"
+        #else
         return "/bin/zsh"
+        #endif
         #endif
     }
 

@@ -6,12 +6,16 @@ import PackageDescription
 //   TermsieCore     Foundation and SwiftTerm only: the model, workspaces and sessions, config,
 //                   shell integration, command marks, text capture. Builds everywhere.
 //   Termsie (mac)   The AppKit app, Sources/Termsie.
-//   Termsie (win)   The Win32 app, Sources/TermsieWindows, with a small C++ target for Direct2D,
-//                   DirectWrite and the Win32 APIs that are awkward to reach from Swift.
+//   Termsie (app)   The raster front end shared by Windows and Linux, Sources/TermsieApp: one
+//                   window drawn in a single pass over a flat C contract (CTermsieHost.h). The
+//                   platform underneath lives in Sources/TermsieApp/Host/<platform> and in
+//                   Sources/CTermsieHost/<platform>: Win32 with Direct2D and DirectWrite on
+//                   Windows, GTK 4 with Cairo and Pango on Linux.
 //
-// Both apps are the executable target "Termsie", so `swift build` produces Termsie on macOS and
-// Termsie.exe on Windows, and the existing Makefile and release scripts keep working. A manifest
-// is evaluated on the host, which is also the target for every build these apps support.
+// Every app is the executable target "Termsie", so `swift build` produces Termsie on macOS and
+// Linux, and Termsie.exe on Windows, and the existing Makefile and release scripts keep working.
+// A manifest is evaluated on the host, which is also the target for every build these apps
+// support.
 
 let swiftTerm: Target.Dependency = .product(name: "SwiftTerm", package: "SwiftTerm")
 
@@ -42,8 +46,9 @@ targets.append(
 #elseif os(Windows)
 targets += [
     .target(
-        name: "CTermsieWin",
-        path: "Sources/CTermsieWin",
+        name: "CTermsieHost",
+        path: "Sources/CTermsieHost",
+        exclude: ["linux"],
         cxxSettings: [
             .define("UNICODE"),
             .define("_UNICODE"),
@@ -76,13 +81,34 @@ targets += [
     ),
     .executableTarget(
         name: "Termsie",
-        dependencies: ["TermsieCore", "CTermsieWin", swiftTerm],
-        path: "Sources/TermsieWindows",
+        dependencies: ["TermsieCore", "CTermsieHost", swiftTerm],
+        path: "Sources/TermsieApp",
+        exclude: ["Host/Linux"],
         linkerSettings: [
             // A GUI app: no console window of its own. Swift supplies `main`, so the C runtime's
             // console entry point is kept.
             .unsafeFlags(["-Xlinker", "/SUBSYSTEM:WINDOWS", "-Xlinker", "/ENTRY:mainCRTStartup"]),
         ]
+    ),
+]
+#elseif os(Linux)
+targets += [
+    // GTK 4 and libsecret come from the system through pkg-config: `libgtk-4-dev` and
+    // `libsecret-1-dev` on Debian and Ubuntu.
+    .systemLibrary(name: "CGtk4", path: "Sources/CGtk4", pkgConfig: "gtk4", providers: [.apt(["libgtk-4-dev"])]),
+    .systemLibrary(name: "CLibSecret", path: "Sources/CLibSecret", pkgConfig: "libsecret-1",
+                   providers: [.apt(["libsecret-1-dev"])]),
+    .target(
+        name: "CTermsieHost",
+        dependencies: ["CGtk4", "CLibSecret"],
+        path: "Sources/CTermsieHost",
+        exclude: ["windows"]
+    ),
+    .executableTarget(
+        name: "Termsie",
+        dependencies: ["TermsieCore", "CTermsieHost", swiftTerm],
+        path: "Sources/TermsieApp",
+        exclude: ["Host/Win32"]
     ),
 ]
 #endif
