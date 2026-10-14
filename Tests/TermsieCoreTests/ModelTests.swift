@@ -187,6 +187,9 @@ final class ConfigTests: CoreTestCase {
         #if os(Windows)
         XCTAssertEqual(config.font.family, "Cascadia Mono")
         XCTAssertEqual(config.shellArgs, [])
+        #elseif os(Linux)
+        XCTAssertEqual(config.font.family, "monospace")
+        XCTAssertEqual(config.shellArgs, ["-l"])
         #else
         XCTAssertEqual(config.font.family, "Menlo")
         XCTAssertEqual(config.shellArgs, ["-l"])

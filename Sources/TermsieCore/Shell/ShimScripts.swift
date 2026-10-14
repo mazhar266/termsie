@@ -10,7 +10,7 @@ import Foundation
 public enum ShimScripts {
     /// Bump when any script below changes; generated directories carry this and regenerate on
     /// mismatch after an app upgrade.
-    public static let version = "4"
+    public static let version = "5"
 
     private static let header = """
     # Termsie shell integration — generated, do not edit. Regenerated when Termsie updates.
@@ -114,6 +114,10 @@ public enum ShimScripts {
         typeset -g HISTFILE=$TERMSIE_HISTFILE
         [[ -n ${TERMSIE_HISTSIZE:-} ]] && typeset -g HISTSIZE=$TERMSIE_HISTSIZE
         [[ -n ${TERMSIE_SAVEHIST:-} ]] && typeset -g SAVEHIST=$TERMSIE_SAVEHIST
+        # zsh saves nothing while SAVEHIST is 0, its default. macOS's /etc/zshrc sets it; Linux's
+        # does not, so a bare account would get an empty history file.
+        (( ${SAVEHIST:-0} > 0 )) || typeset -g SAVEHIST=10000
+        (( ${HISTSIZE:-0} >= SAVEHIST )) || typeset -g HISTSIZE=$SAVEHIST
         unsetopt share_history
         setopt inc_append_history
         return 0
