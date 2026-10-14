@@ -11,14 +11,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  core-linux:
-    name: Core (Linux)
+  linux:
+    name: Linux app
     runs-on: ubuntu-latest
     container: swift:6.4
     steps:
       - uses: actions/checkout@v4
+      - name: GTK 4, libsecret, a display and the shells
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q libgtk-4-dev libsecret-1-dev xvfb fonts-dejavu-core zsh expect dbus
       - name: Test the shared core
         run: swift test
+      - name: Build the app
+        run: ./scripts/build-linux.sh
+      - name: Shell shim matches a native zsh
+        run: ./scripts/test-shim.sh dist/linux/x86_64/termsie/bin/termsie
+      - name: Drive the app headlessly
+        if: always()
+        run: ./scripts/test-linux.sh dist/linux/x86_64/termsie/bin/termsie test-output
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-test-output
+          path: test-output
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: termsie-linux-x86_64
+          path: dist/linux/*.tar.gz
+          if-no-files-found: ignore
 
   macos:
     name: macOS app

@@ -50,7 +50,8 @@ void tw_free(void *p) { free(p); }
 // ------------------------------------------------------------------------------------ setup
 
 void tw_process_init(void) {
-    gtk_init();
+    // No display (a container running `--emit-shim`) is not fatal here; only a window needs one.
+    if (!gtk_init_check()) return;
     GtkSettings *settings = gtk_settings_get_default();
     if (settings) g_object_set(settings, "gtk-application-prefer-dark-theme", TRUE, NULL);
 }

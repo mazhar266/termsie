@@ -2,7 +2,29 @@
 
 *Written 2026-10-13 against the `windows-port` branch (16f0a7f, 0.8.0), on Pop!_OS 24.04 under
 GNOME on Wayland. Companion to [windows-release-plan.md](windows-release-plan.md), which this
-plan builds on.*
+plan builds on. Phases 0 to 4 and most of 5 and 6 were then carried out on the `linux-port`
+branch the next day; section 0 records the outcome, and the rest is the plan as written.*
+
+## 0. Outcome
+
+Option A, as recommended, done on `linux-port` in one pass: the Windows front end was hoisted
+into `Sources/TermsieApp` with `Host/Win32` and `Host/Linux` underneath, the C layer became one
+`CTermsieHost` target with `windows/` and `linux/` sources behind a single header, and the GTK 4
+host went in on top. User-facing documentation is in [linux.md](linux.md).
+
+| Phase | Result |
+| --- | --- |
+| 0. Spike | Folded into the real code: Pango shapes each run and every cluster is pinned to its cells; a GtkDrawingArea's draw callback is the only place a frame is drawn, and the host queues redraws. |
+| 1. Hoist | `Key`, `Modifiers`, `WindowRef`, `HostWindow`, `ShellProcess`, `NativeMenu` and `CommandLineText` are the seams; `MainWindow` no longer subclasses the Win32 window, `Win32WindowHost` does. The Windows side compiles only in CI, which has not run yet. |
+| 2. Linux host | GTK window and events, input method, main-loop bridge (with Foundation pumped), Cairo/Pango renderer, fonts through fontconfig, PRIMARY selection, menus as popovers, GIO config watcher, snapshots as PNGs. |
+| 3. Dialogs | `FormWindow` on GTK widgets with the same API; `GtkMessageDialog` and `GtkFileChooserNative`, so GTK 4.6 is enough. |
+| 4. Shell | SwiftTerm's `LocalProcess` is the shell; the foreground job and folder come from `tcgetpgrp` and `/proc`; secrets in libsecret; the default shell is the account's. |
+| 5. Release | `build-linux.sh` stages `bin/`, `share/applications`, `share/icons`, `share/metainfo` with the Swift runtime linked in and packs a tarball; the updater only opens the release page. No `.deb`, release workflow or signing yet. |
+| 6. Tests | `test-linux.sh`: 29 checks, the Windows list with `sh` in place of cmd; all pass on this machine under XWayland. CI runs it under `xvfb-run`. |
+
+Still to do: run CI to prove the Windows build survived the hoist; the `.deb` and the
+`release-linux.yml` workflow with an aarch64 runner; blur or plain translucency; and a look at
+the first real users' fonts, since `monospace` resolves differently on every distribution.
 
 ## 1. The short version
 

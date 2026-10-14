@@ -158,13 +158,15 @@ tests each architecture on a runner of its own kind, then publishes both in one 
 
 - **TermsieCore** is shared with macOS: the model, workspaces and sessions, config, shell
   integration (including the PowerShell script), command marks, text capture and kept output.
-- **CTermsieWin** is a small C++ layer for what is awkward from Swift: Direct2D and DirectWrite
-  on a DirectComposition swap chain (which is what lets the backdrop show through), the pseudo
-  console, the Credential Manager, process listing, the clipboard, file dialogs, hashing and
-  signature checks.
-- **TermsieWindows** is the app: one Win32 window per Termsie window, drawn in a single Direct2D
-  pass, with SwiftTerm as the emulator. Terminal text is drawn as DirectWrite glyph runs with every
-  advance pinned to the cell grid; characters the font lacks fall back through DirectWrite.
+- **CTermsieHost** is a small C layer for what is awkward from Swift, behind one contract both
+  Windows and Linux implement; `windows/` is C++: Direct2D and DirectWrite on a DirectComposition
+  swap chain (which is what lets the backdrop show through), the pseudo console, the Credential
+  Manager, process listing, the clipboard, menus, file dialogs, hashing and signature checks.
+- **TermsieApp** is the app, shared with Linux: one window per Termsie window, drawn in a single
+  pass, with SwiftTerm as the emulator. `Host/Win32` is the Windows side of it: the HWND and its
+  messages, the message loop, the settings dialogs as Win32 controls, the pseudo console and the
+  updater. Terminal text is drawn as DirectWrite glyph runs with every advance pinned to the cell
+  grid; characters the font lacks fall back through DirectWrite.
 
 The pseudo console prefers a `conpty.dll` shipped next to the executable (the release bundles
 Microsoft's current one, the same Windows Terminal uses) over the copy in Windows, whose older

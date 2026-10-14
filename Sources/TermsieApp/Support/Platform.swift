@@ -9,6 +9,10 @@ import TermsieCore
 /// A native window, as the opaque pointer the C layer and the dialogs take for an owner.
 typealias WindowRef = UnsafeMutableRawPointer
 
+/// A UTF-16 unit, the type the C contract speaks on every platform (WinSDK's WCHAR is the same
+/// type, which this shadows harmlessly).
+typealias WCHAR = UInt16
+
 /// The window a `MainWindow` draws into and receives events from.
 protocol HostWindow: AnyObject {
     /// For dialogs and alerts.

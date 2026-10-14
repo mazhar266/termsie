@@ -6,10 +6,10 @@
 
 **One window for everything you're running.**
 
-A native terminal for macOS and Windows, built for developers who always have five things going at once:
+A native terminal for macOS, Windows and Linux, built for developers who always have five things going at once:
 an API, a bundler, a worker, a database shell, and somewhere a `tail -f`.
 
-[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B%20%7C%20Windows%2010%2B-lightgrey.svg)](#requirements)
+[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B%20%7C%20Windows%2010%2B%20%7C%20Linux-lightgrey.svg)](#requirements)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-F05138.svg)](https://swift.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early-orange.svg)](#project-status)
@@ -52,9 +52,11 @@ padding and line-wrapping overrides, and a config file that reloads the moment y
 
 ## Requirements
 
-- macOS 14 or later (developed on macOS 26), or Windows 10 version 1903 or later on x64 or ARM64
+- macOS 14 or later (developed on macOS 26), Windows 10 version 1903 or later on x64 or ARM64,
+  or Linux with GTK 4.6 or later (Wayland or X11) on x86_64 or aarch64
 - To build from source: the Xcode command line tools with Swift 5.9+ on macOS; on Windows, Swift
-  6.4 and Visual Studio 2022 Build Tools (see [Termsie on Windows](docs/windows.md))
+  6.4 and Visual Studio 2022 Build Tools (see [Termsie on Windows](docs/windows.md)); on Linux,
+  Swift 6.4 and the GTK 4 and libsecret development packages (see [Termsie on Linux](docs/linux.md))
 
 ## Install
 
@@ -71,6 +73,10 @@ On **Windows**, download the zip or the MSIX from the
 [releases page](https://github.com/tommihip/termsie/releases), or `winget install Termsie.Termsie`.
 [Termsie on Windows](docs/windows.md) covers the shells it supports (PowerShell, cmd, Git Bash,
 WSL), its keyboard shortcuts (⌘ becomes Ctrl+Shift), where it keeps its files, and building it.
+
+On **Linux**, download the tarball from the releases page and unpack it into `~/.local` or
+`/usr/local`. [Termsie on Linux](docs/linux.md) covers the shells, the shortcuts (the same as on
+Windows), where it keeps its files, what Wayland does differently, and building it.
 
 ### Updates
 
@@ -517,9 +523,12 @@ been observed returning nil — which then detonates deep inside CoreText, far f
 
 The package has three parts. **TermsieCore** is shared and builds everywhere: the model,
 workspaces and sessions, config, shell integration (zsh, bash, fish and PowerShell), command marks,
-text capture and kept output. **Termsie** is the AppKit app below. On Windows the same `Termsie`
-product is built from **TermsieWindows** (Win32 and Direct2D) with a small C++ layer,
-**CTermsieWin**; see [Termsie on Windows](docs/windows.md).
+text capture and kept output. **Termsie** is the AppKit app below. On Windows and Linux the same
+`Termsie` product is built from **TermsieApp**, a front end the two share that draws one window
+in a single pass over a flat C contract, **CTermsieHost**: Win32 with Direct2D and DirectWrite
+under `Host/Win32` and `CTermsieHost/windows`, GTK 4 with Cairo and Pango under `Host/Linux` and
+`CTermsieHost/linux`; see [Termsie on Windows](docs/windows.md) and
+[Termsie on Linux](docs/linux.md).
 
 ```
 Sources/TermsieCore/
@@ -553,9 +562,10 @@ swift test               # the shared core, on macOS, Linux and Windows
 ./scripts/test-app.sh    # the app, driven headlessly
 ```
 
-On Windows, `./scripts/test-windows.ps1` drives the Windows app the same way. CI runs the core
-tests on Linux, macOS and Windows, builds the macOS app and checks its shim, and builds, drives and
-packages the Windows app on every push.
+On Windows, `./scripts/test-windows.ps1` drives the Windows app the same way, and on Linux
+`./scripts/test-linux.sh` does. CI runs the core tests on Linux, macOS and Windows, builds the
+macOS app and checks its shim, and builds, drives and packages the Windows and Linux apps on every
+push.
 
 `test-shim.sh` compares a native `zsh -li` against a shimmed one and requires the exported
 environment to be identical apart from the history variables, then proves history isolation over

@@ -3,9 +3,6 @@ import Glibc
 import CTermsieHost
 import TermsieCore
 
-/// UTF-16 units, the type the C contract speaks on every platform.
-typealias WCHAR = UInt16
-
 /// What the Linux host tells the shared front end about itself.
 enum Host {
     /// The desktop's interface font, from GTK's settings.
