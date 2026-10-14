@@ -132,6 +132,10 @@ enum TerminalPainter {
             }
         }
         for c in first..<last {
+            // The cell after a wide character is a placeholder whose attribute SwiftTerm fills
+            // with an inverted default background; it belongs to the character before it, so
+            // the run simply continues over it.
+            if line[c].width == 0 { continue }
             let attr = line[c].attribute
             let bg: RGBA?
             if attr.style.contains(.inverse) {
