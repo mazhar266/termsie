@@ -34,6 +34,16 @@ PowerShell's integration is a script Termsie generates (it never edits your prof
 right after your profile through `-NoExit -Command`, loaded as a script block, so it works even
 under Windows PowerShell's default execution policy, which blocks script files.
 
+### SSH terminals
+
+SSH terminals are created on the Mac. When a workspace holding one opens on Windows, the
+terminal runs Windows' own OpenSSH client (`ssh.exe` on PATH, else
+`C:\Windows\System32\OpenSSH\ssh.exe`), so `~/.ssh/config`, the agent and `known_hosts` apply. Its
+working folder and startup commands run on the server, as on the Mac. Passwords and passphrases
+saved on the Mac stay in its Keychain, so `ssh` asks for them in the terminal; a connection
+whose private key is stored in the Keychain cannot be used and says so — choose a key file for it
+instead.
+
 ## Keyboard
 
 macOS's ⌘ becomes **Ctrl+Shift**, as in Windows Terminal, so every plain Ctrl+letter still

@@ -10,6 +10,7 @@ protocol TerminalSidebarDelegate: AnyObject {
     func sidebarDidRequestDuplicate(_ id: String)
     func sidebarDidReorder()
     func sidebarDidRequestNew()
+    func sidebarDidRequestNewSSH()
     func sidebarDidRequestRunCommands(_ id: String)
     func sidebarDidRequestRunAllCommands()
     func sidebarDidSetEnvironment(_ environment: String?, for id: String)
@@ -69,6 +70,7 @@ final class TerminalSidebarView: NSView, NSTableViewDataSource, NSTableViewDeleg
         scrollView.autoresizingMask = [.width, .height]
         addSubview(scrollView)
         footer.onAdd = { [weak self] in self?.delegate?.sidebarDidRequestNew() }
+        footer.onAddSSH = { [weak self] in self?.delegate?.sidebarDidRequestNewSSH() }
         footer.onRunAll = { [weak self] in self?.delegate?.sidebarDidRequestRunAllCommands() }
         addSubview(footer)
         copyTools.onAction = { [weak self] target in self?.delegate?.sidebarDidRequestCopy(target) }
@@ -200,6 +202,9 @@ final class TerminalSidebarView: NSView, NSTableViewDataSource, NSTableViewDeleg
     }
 
     // MARK: Refresh
+
+    /// The New Terminal menu's items, for the headless tests (a real popup would block them).
+    func addMenuForTesting() -> NSMenu { footer.makeAddMenu() }
 
     func reloadAll() {
         rowMetrics = TerminalRowView.Metrics.forWidth(bounds.width > 0 ? bounds.width : TerminalRowView.Metrics.fullWidth,
@@ -333,7 +338,9 @@ final class TerminalSidebarView: NSView, NSTableViewDataSource, NSTableViewDeleg
         view.isBusy = pane?.hasRunningJob ?? false
         view.isActivePane = (id == activeID)
         view.title = pane?.displayTitle ?? def.displayName
-        view.subtitle = pane?.displayDirectory ?? (def.cwd.map(ProcessInspector.abbreviateHome) ?? "")
+        view.subtitle = pane?.displayDirectory
+            ?? def.ssh.map { "ssh " + $0.destination }
+            ?? (def.cwd.map(ProcessInspector.abbreviateHome) ?? "")
         view.badge = pane?.header.badge ?? .none
         let config = ConfigStore.shared.config
         let style = config.environment(def.environment)
@@ -508,13 +515,13 @@ final class TerminalSidebarView: NSView, NSTableViewDataSource, NSTableViewDeleg
     }
 
     @objc private func contextReveal(_ sender: Any?) {
-        guard let id = contextID(sender),
+        guard let id = contextID(sender), registry.definition(id)?.ssh == nil,
               let dir = registry.pane(for: id)?.currentDirectory ?? registry.definition(id)?.cwd else { return }
         let path = (dir as NSString).expandingTildeInPath
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
     @objc private func contextCopyPath(_ sender: Any?) {
-        guard let id = contextID(sender),
+        guard let id = contextID(sender), registry.definition(id)?.ssh == nil,
               let dir = registry.pane(for: id)?.currentDirectory ?? registry.definition(id)?.cwd else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString((dir as NSString).expandingTildeInPath, forType: .string)

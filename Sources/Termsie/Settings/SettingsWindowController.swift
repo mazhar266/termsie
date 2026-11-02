@@ -171,12 +171,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate,
         generalForm.number("Columns when lines are not wrapped", \.unwrappedColumnsValue,
                            range: Double(TermsieConfig.minUnwrappedColumns)...Double(TermsieConfig.maxUnwrappedColumns),
                            step: 10, isInteger: true, suffix: "cols",
-                           hint: "The width an unwrapped terminal reports to the shell. Anything past it is still discarded, because that is what a terminal does — so this is how far right you can scroll.")
+                           hint: "The width an unwrapped terminal reports to the shell. Anything past it is still discarded, because that is what a terminal does — so this is how far right you can scroll. A very wide grid is limited to what the graphics card can draw, which on a Retina display is about 1000 columns at 13 pt.")
 
         generalForm.section("Copying")
         generalForm.checkbox("Copy a selection as soon as it is made", \.copy.autoCopyOnSelect,
                              hint: "Dragging over text, double-clicking a word or triple-clicking a line puts it straight on the clipboard.")
         generalForm.checkbox("Show the copy tools in the terminal list", \.copy.showTools)
+        generalForm.checkbox("Confirm each copy on the terminal", \.copy.showConfirmation,
+                             hint: "A note over the terminal says what went on the clipboard and how it begins, or that there was nothing to copy.")
         generalForm.checkbox("Let the shell mark where commands begin and end", \.copy.commandMarks,
                              hint: "Copying one command and its output needs the shell to say where each prompt starts. Off, Termsie falls back to the line it saw you type. Takes effect in terminals opened afterwards.")
         generalForm.checkbox("Trim blank space from copied text", \.copy.trimCopiedText,

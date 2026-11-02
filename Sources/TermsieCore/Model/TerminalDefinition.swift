@@ -38,6 +38,9 @@ public struct TerminalDefinition: Codable, Equatable {
     public var z: Int = 0
     /// Whether this terminal was live when the session was saved.
     public var openOnRestore: Bool = true
+    /// Set for an SSH terminal: it runs `ssh` to this connection instead of a local shell. Its
+    /// startup commands and working folder then apply on the server.
+    public var ssh: SSHConnection?
 
     public init(id: String = TerminalDefinition.newID(),
          name: String? = nil,
@@ -75,6 +78,7 @@ public struct TerminalDefinition: Codable, Equatable {
         lineWrap = try c.decodeIfPresent(Bool.self, forKey: .lineWrap)
         z = try c.decodeIfPresent(Int.self, forKey: .z) ?? 0
         openOnRestore = try c.decodeIfPresent(Bool.self, forKey: .openOnRestore) ?? true
+        ssh = try? c.decodeIfPresent(SSHConnection.self, forKey: .ssh)
         if let f = try c.decodeIfPresent([Double].self, forKey: .frame), f.count == 4,
            f[2] > 0, f[3] > 0 {
             frame = f
@@ -97,11 +101,17 @@ public struct TerminalDefinition: Codable, Equatable {
     /// Display name when no live pane can supply a better one.
     public var displayName: String {
         if let n = name, !n.isEmpty { return n }
+        if let ssh, !ssh.host.isEmpty { return ssh.destination }
         if let dir = cwd, !dir.isEmpty {
             let base = HomePath.lastComponent(HomePath.expand(dir))
             if !base.isEmpty { return base }
         }
         return "shell"
+    }
+
+    /// Every Keychain reference this terminal uses: secret variables and SSH credentials.
+    public var secretRefs: [String] {
+        env.compactMap { $0.secret ? $0.secretRef : nil } + (ssh?.secretRefs ?? [])
     }
 
     /// True when this terminal uses the global font rather than its own.
@@ -167,7 +177,7 @@ public struct TabLayout: Codable, Equatable {
 
     /// Every Keychain reference this tab's secrets use.
     public var secretRefs: Set<String> {
-        Set((settings.env + terminals.flatMap(\.env)).compactMap { $0.secret ? $0.secretRef : nil })
+        Set(settings.env.compactMap { $0.secret ? $0.secretRef : nil } + terminals.flatMap(\.secretRefs))
     }
 
     /// A copy with startup commands removed, for the cases that must not re-run anything.

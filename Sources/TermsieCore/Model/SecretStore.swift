@@ -119,6 +119,9 @@ public enum SecretStore {
 
     // MARK: Test backend
 
+    /// The scripted-test secrets file in use, for handing on to a helper process.
+    public static var testFilePath: String? { testFileURL?.path }
+
     private static var testFileURL: URL? {
         guard testModeEnabled,
               let path = ProcessInfo.processInfo.environment["TERMSIE_SECRETS_FILE"],
