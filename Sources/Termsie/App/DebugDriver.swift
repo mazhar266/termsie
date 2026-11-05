@@ -318,6 +318,18 @@ enum DebugDriver {
                 let n = controller.displayedNames(for: id)
                 NSLog("DebugDriver name: id=\(id) header=[\(n.header ?? "-")] row=[\(n.row)]")
             }
+        } else if action == "dumpGrid", let view = controller?.activePane?.terminalView {
+            let scale = view.window?.backingScaleFactor ?? 0
+            NSLog("DebugDriver grid: cols=\(view.getTerminal().cols) widthPx=\(Int(view.frame.width * scale)) scale=\(scale)")
+        } else if action == "dumpAddMenu", let controller {
+            let titles = controller.sidebarAddMenu.items.map(\.title)
+            NSLog("DebugDriver addMenu: [%@]", titles.joined(separator: " | "))
+        } else if action.hasPrefix("pickAddMenu:"), let controller, let n = Int(action.dropFirst(12)) {
+            // pickAddMenu:2 chooses the second item, as a click in the popup would.
+            let menu = controller.sidebarAddMenu
+            if n >= 1, n <= menu.items.count { menu.performActionForItem(at: n - 1) }
+        } else if action == "dumpToast", let controller {
+            NSLog("DebugDriver toastVisible: \(controller.activePane?.showsCopyToast == true)")
         } else if action == "readout", let controller {
             NSLog("DebugDriver readout: \(controller.activePane?.showsResizeReadout == true ? "visible" : "cleared")")
         } else if action.hasPrefix("rename:"), let controller {
@@ -371,6 +383,15 @@ enum DebugDriver {
             let cap = TerminalTextCapture(pane.terminalView.getTerminal())
             let text = cap.rowCount > 0 ? cap.text(rows: 0...cap.lastContentRow()) : ""
             NSLog("DebugDriver text: #\(n) [%@]", text.replacingOccurrences(of: "\n", with: " | "))
+        } else if action.hasPrefix("optionKey:"), let view = controller?.activePane?.terminalView {
+            // optionKey:@|2 asks how Option+2 on a layout that types "@" there would be read.
+            let parts = action.dropFirst(10).split(separator: "|", maxSplits: 1).map(String.init)
+            guard parts.count == 2, let event = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: .option, timestamp: 0,
+                windowNumber: view.window?.windowNumber ?? 0, context: nil, characters: parts[0],
+                charactersIgnoringModifiers: parts[1], isARepeat: false, keyCode: 0) else { return }
+            view.prepareForKeyDown(event)
+            NSLog("DebugDriver optionKey: [%@] meta=\(view.optionAsMetaKey)", parts[0])
         } else if action.hasPrefix("pane:"), let n = Int(action.dropFirst(5)) {
             let item = NSMenuItem(); item.tag = n
             controller?.focusPaneByNumber(item)

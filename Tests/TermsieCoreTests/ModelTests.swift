@@ -259,3 +259,35 @@ final class ReleaseFeedTests: XCTestCase {
         XCTAssertEqual(ReleaseFeed.hex([0, 255, 16]), "00ff10")
     }
 }
+
+final class SSHConnectionTests: CoreTestCase {
+    func testSSHTerminalDecodesAndNamesItself() throws {
+        let json = #"{"ssh": {"host": "example.com", "user": "deploy", "port": 2222}, "env": [{"name": "TOKEN", "secret": true, "secretRef": "r-env"}]}"#
+        var def = try JSONDecoder().decode(TerminalDefinition.self, from: Data(json.utf8))
+        XCTAssertEqual(def.ssh?.destination, "deploy@example.com:2222")
+        XCTAssertEqual(def.displayName, "deploy@example.com:2222")
+        def.ssh?.passwordRef = "r-pass"
+        XCTAssertEqual(Set(def.secretRefs), ["r-env", "r-pass"])
+    }
+
+    func testProblemsRefuseUnsafeConnections() {
+        XCTAssertNotNil(SSHConnection(host: "").problem)
+        XCTAssertNotNil(SSHConnection(host: "-oProxyCommand=x").problem)
+        XCTAssertNotNil(SSHConnection(host: "a b").problem)
+        XCTAssertNotNil(SSHConnection(host: "h", port: 70000).problem)
+        var c = SSHConnection(host: "h")
+        c.options = ["ProxyCommand=nc %h %p"]
+        XCTAssertNotNil(c.problem)
+        c.options = ["ServerAliveInterval=30"]
+        XCTAssertNil(c.problem)
+    }
+
+    func testRemoteCommandQuotesAndKeepsALoginShell() {
+        XCTAssertNil(SSHConnection.remoteCommand(commands: [" "], directory: nil))
+        let line = SSHConnection.remoteCommand(commands: ["make", "echo it's"], directory: "~/src")
+        XCTAssertEqual(line?.hasPrefix("exec /bin/sh -c '"), true)
+        XCTAssertEqual(line?.contains("make && echo it"), true)
+        XCTAssertEqual(line?.contains("exec \"${SHELL:-/bin/sh}\" -l"), true)
+        XCTAssertEqual(SSHConnection.shellQuote("it's"), #"'it'\''s'"#)
+    }
+}

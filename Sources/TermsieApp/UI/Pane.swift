@@ -184,6 +184,13 @@ final class Pane {
         env.merge(variables.values) { _, new in new }
         env["TERMSIE_PANE_ID"] = definitionID
 
+        if let connection = tab?.registry.definition(definitionID)?.ssh {
+            startSSH(connection, environment: env)
+            reportMissingSecrets(variables.missing)
+            tab?.paneInfoChanged(self)
+            return
+        }
+
         let shell = config.resolvedShell
         shellExecutable = shell
         shellName = ShellKind.displayName(shell)
@@ -216,10 +223,7 @@ final class Pane {
         if let warning = resolved.warning {
             session.feed(text: "\r\n\u{1b}[33m[\(warning)]\u{1b}[0m\r\n")
         }
-        if !variables.missing.isEmpty {
-            let names = variables.missing.joined(separator: ", ")
-            session.feed(text: "\r\n\u{1b}[33m[secret \(names) not found in \(Host.secretStoreName) — not set]\u{1b}[0m\r\n")
-        }
+        reportMissingSecrets(variables.missing)
         // When the shell runs the startup commands itself there is no timing heuristic at all;
         // typing them is the fallback for shells that cannot be shimmed (cmd, WSL).
         if !integration.runsStartupCommands, !startupCommands.isEmpty {
@@ -227,6 +231,35 @@ final class Pane {
             scheduleCommandFlush(after: 3.0)
         }
         tab?.paneInfoChanged(self)
+    }
+
+    /// An SSH terminal runs the system `ssh` instead of a local shell. Its folder and startup commands
+    /// belong to the server, so neither is applied here.
+    private func startSSH(_ connection: SSHConnection, environment env: [String: String]) {
+        shellName = "ssh"
+        cwdWarning = nil
+        currentDirectory = nil
+        restoreOutput()
+        switch SSHLaunch.prepare(connection, commands: startupCommands, remoteDirectory: initialDirectory,
+                                 environment: env) {
+        case .success(let plan):
+            shellExecutable = plan.executable
+            do {
+                try session.start(executable: plan.executable, arguments: plan.args, environment: env,
+                                  directory: HomePath.home)
+            } catch {
+                Log.write("could not start ssh: \(error)")
+                session.feed(text: "\r\n\u{1b}[31m[\(error)]\u{1b}[0m\r\n")
+            }
+        case .failure(let failure):
+            session.feed(text: "\r\n\u{1b}[31m[cannot connect to \(connection.destination): \(failure.reason)]\u{1b}[0m\r\n")
+        }
+    }
+
+    private func reportMissingSecrets(_ missing: [String]) {
+        guard !missing.isEmpty else { return }
+        let names = missing.joined(separator: ", ")
+        session.feed(text: "\r\n\u{1b}[33m[secret \(names) not found in \(Host.secretStoreName) — not set]\u{1b}[0m\r\n")
     }
 
     /// Expands and checks a configured folder. A missing one falls back to home and says so.

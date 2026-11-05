@@ -38,6 +38,15 @@ shell. Set `"shell"` in config.json, or Shell in Settings, to use another:
 The integration is a set of generated files (a `ZDOTDIR`, a bash rc, a fish init command) that
 never touch your dotfiles; `termsie --emit-shim <folder>` writes them out to look at.
 
+### SSH terminals
+
+SSH terminals are created on the Mac. When a workspace holding one opens on Linux, the terminal
+runs the system `ssh` (the first on `PATH`), so `~/.ssh/config`, the agent and `known_hosts`
+apply. Its working folder and startup commands run on the server, as on the Mac. Passwords and
+passphrases saved on the Mac stay in its Keychain, so `ssh` asks for them in the terminal; a
+connection whose private key is stored in the Keychain cannot be used and says so — choose a key
+file for it instead.
+
 ## Keyboard
 
 The shortcuts are the ones Windows Terminal and GNOME Terminal use: macOS's ⌘ becomes

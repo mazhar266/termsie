@@ -2,7 +2,7 @@ import Foundation
 
 /// The version both front ends report, and the one the release scripts bump.
 public enum AppInfo {
-    public static let version = "0.8.0"
+    public static let version = "0.9.1"
     public static let name = "Termsie"
 }
 
